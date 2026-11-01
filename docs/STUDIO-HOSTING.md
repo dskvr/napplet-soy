@@ -77,7 +77,12 @@ requires the original author to publish a Git source reference and pinned revisi
 Studio's isolated maker copy has temporary inspection history; the controller
 retains the real draft history. Terminal diagnostics cannot create a missing
 upstream binding, and this refusal gives browser-specific recovery guidance.
-This UI/guidance correction is implemented locally, not yet deployed.
+This UI/guidance correction was deployed on 2026-11-01 from `ddd802a` as release
+`20261101070404325-97346`, with the updated hosted worker. The source suite
+(930 tests), production service checks, original Pokédex worker acceptance and
+public route checks passed. All 14 existing draft Git workspaces and their
+bindings were preserved. Reload Studio to receive the updated controls and
+source context. This does not add upstream proposals for HTML-only publications.
 
 `bash scripts/test-studio-remix-network.sh` verifies the real CLI import under the
 generated Studio firewall in isolated Linux network/mount namespaces (sudo,
