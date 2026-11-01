@@ -68,6 +68,17 @@ shared sandbox check. An absent upstream conformance suite is shown as skipped.
 Projects with dependencies or custom build commands still require an exact
 installed profile; a missing lockfile does not bypass that requirement.
 
+Proposal availability is derived from the imported upstream Git binding, including
+when an older draft is reopened. A source link or a local checkpoint alone does
+not identify a repository to receive changes. HTML/archive-only remixes therefore
+show an explanation beside the disabled **Propose changes** button; **Publish**
+can share a separate remix, subject to the original license. Proposing upstream
+requires the original author to publish a Git source reference and pinned revision.
+Studio's isolated maker copy has temporary inspection history; the controller
+retains the real draft history. Terminal diagnostics cannot create a missing
+upstream binding, and this refusal gives browser-specific recovery guidance.
+This UI/guidance correction is implemented locally, not yet deployed.
+
 `bash scripts/test-studio-remix-network.sh` verifies the real CLI import under the
 generated Studio firewall in isolated Linux network/mount namespaces (sudo,
 nftables, iproute2, OpenSSL and Node required). Its local TLS fixtures require no

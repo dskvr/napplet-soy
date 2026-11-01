@@ -116,6 +116,7 @@ export class Studio {
       for (const project of this.projects) {
         if (!/^[a-f0-9-]{36}$/.test(project.id)) throw new Error('Invalid saved project ID.');
         delete project.previewUrl;
+        delete project.proposalAvailable;
         if (project.initialized) await this.rememberSourceRevision(project);
         const publication = project.publication?.attempt;
         if (publication?.status === 'published' && !publication.result?.websiteReady) {
@@ -573,10 +574,13 @@ export class Studio {
     );
   }
   private async rememberSourceRevision(p: Project) {
-    if (!p.source || p.sourceRevision) return;
+    if (!p.source) return;
     try {
-      p.sourceRevision = (await readBinding(this.workspace(p.id)))?.project.remix?.revision;
+      const binding = await readBinding(this.workspace(p.id));
+      p.sourceRevision ??= binding?.project.remix?.revision;
+      p.proposalAvailable = !!binding?.upstream;
     } catch {
+      delete p.proposalAvailable;
       // Optional preview metadata cannot prevent opening a saved workspace.
       // Source/publication operations still validate the binding and report errors.
     }
@@ -608,9 +612,9 @@ export class Studio {
         await this.checkpoint(p, 'Studio: imported remix starting point', signal);
       p.baseline = (await this.git(p, ['rev-parse', 'HEAD'], signal)).trim();
       p.initialized = true;
-      await this.rememberSourceRevision(p);
       await this.save();
     }
+    await this.rememberSourceRevision(p);
     if (!p.setup) {
       await this.stage(p, 'preparing', 'Installing the project’s pinned tools');
       await this.command(p, [...this.options.soyli, 'setup'], signal, 'set up soyLI project');
@@ -731,6 +735,9 @@ export class Studio {
               .map((m) => `${m.role}: ${m.text.slice(0, 2000)}`)
               .join('\n') +
             '\nCurrent request:\n'
+          : '') +
+        (p.source && p.proposalAvailable === false
+          ? 'Controller source context: this remix has no upstream Git repository binding. Its files and private Git checkpoints are valid, but it cannot submit an upstream proposal. The creator can use Publish to share a separate remix, subject to the original license. Do not try to repair Git or run doctor to enable proposals.\n'
           : '') +
         prompt,
       p.session,

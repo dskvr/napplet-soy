@@ -38,6 +38,8 @@ export type Project = {
   source?: string;
   /** Exact published manifest selected by the source import, not the draft build. */
   sourceRevision?: string;
+  /** Derived by the controller from the real upstream binding, never the job copy. */
+  proposalAvailable?: boolean;
   createdAt: string;
   updatedAt: string;
   phase: Phase;

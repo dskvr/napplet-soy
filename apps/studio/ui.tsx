@@ -22,6 +22,7 @@ import {
 import type { StudioState } from './types';
 import { working } from './types';
 import { ProposalDialog } from './proposal-ui';
+import { ProposalEntry } from './proposal-entry';
 import { MergePanel } from './merge-ui';
 import { PublicationDialog, usePublicationSigner } from './publication-ui';
 import { ActivityPanel, ChatText } from './activity-ui';
@@ -585,15 +586,7 @@ export function StudioApp({
                   ? 'Publish update'
                   : 'Publish'}
               </button>
-              {p.source && !p.merge && (
-                <button
-                  className="outline"
-                  disabled={busy || !p.preview}
-                  onClick={() => setProposalOpen(true)}
-                >
-                  Propose changes
-                </button>
-              )}
+              <ProposalEntry project={p} busy={busy} open={() => setProposalOpen(true)} />
             </div>
             <div className={`status ${p.phase}`} role="status">
               {active ? (
