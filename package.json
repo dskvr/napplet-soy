@@ -65,7 +65,7 @@
     "@isomorphic-git/lightning-fs": "4.10.3",
     "@jitl/quickjs-singlefile-cjs-release-sync": "0.31.0",
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@napplet/shim": "0.31.0",
+    "@napplet/shim": "0.35.0",
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@radix-ui/react-dialog": "1.1.23",

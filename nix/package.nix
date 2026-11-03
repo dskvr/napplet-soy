@@ -144,7 +144,7 @@ let
     # Fixup can embed host-specific Nix store paths in the fixed-output tree.
     dontFixup = true;
 
-    outputHash = "sha256-skL2uuB3hII9V/bOefYRoir3hmJxrMvf9556RuKEIqI=";
+    outputHash = "sha256-GdhYAqTC5PgS0Y7Fe5eYpamF17wwmtz6RIWb+EjTMa4=";
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
   };
