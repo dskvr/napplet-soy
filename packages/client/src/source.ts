@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  manifestSourceCommit,
+  manifestSourceLocation,
+  sourceArchiveReference,
+} from '../../protocol/src/source-archive';
 import { sha256, type SignedEvent } from '../../protocol/src';
 import { validateManifest } from '../../protocol/src/manifest';
 import { sourceArchive } from '../../remix/src/archive';
@@ -22,21 +27,7 @@ type Dependencies = {
 
 /** Only a signed, content-addressed URL can supply the original project. */
 function archiveReference(manifest: SignedEvent) {
-  const refs = manifest.tags.filter((tag) => tag[0] === 'source-archive');
-  if (!refs.length) return null;
-  if (refs.length !== 1 || !refs[0][1] || refs[0][1].length > 4096)
-    throw new Error('Invalid source archive reference.');
-  const url = new URL(refs[0][1]);
-  const hash = /\/([a-f0-9]{64})(?:\.tar)?$/.exec(url.pathname)?.[1];
-  if (
-    !hash ||
-    url.username ||
-    url.password ||
-    url.hash ||
-    !['https:', 'http:'].includes(url.protocol)
-  )
-    throw new Error('Invalid source archive reference.');
-  return { url, hash };
+  return sourceArchiveReference(manifest.tags);
 }
 
 function textFile(bytes: Uint8Array) {
@@ -165,7 +156,7 @@ export function createSourceBrowser(deps: Dependencies) {
       const { manifest } = release;
       const tag = (key: string) => manifest.tags.find((t) => t[0] === key)?.[1];
       let sourceUrl: string | null = null;
-      const sourceReference = (tag('source') ?? '').slice(0, 4096) || null;
+      const sourceReference = manifestSourceLocation(manifest.tags);
       try {
         const url = new URL(sourceReference ?? '');
         if (url.protocol === 'https:' && !url.username && !url.password) sourceUrl = url.href;
@@ -199,7 +190,7 @@ export function createSourceBrowser(deps: Dependencies) {
         title: (tag('title') || release.identity?.identifier || 'Untitled napplet').slice(0, 160),
         sourceUrl,
         sourceReference,
-        commit: (tag('source-commit') ?? '').slice(0, 128) || null,
+        commit: manifestSourceCommit(manifest.tags),
         archiveUrl: (() => {
           try {
             return archiveReference(manifest)?.url.href ?? null;
