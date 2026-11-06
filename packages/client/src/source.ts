@@ -25,7 +25,7 @@ type Dependencies = {
   manifestBlocked?: (event: SignedEvent) => boolean;
 };
 
-/** Only a signed, content-addressed URL can supply the original project. */
+/** Only a signed archive digest can identify the original project. */
 function archiveReference(manifest: SignedEvent) {
   return sourceArchiveReference(manifest.tags);
 }
@@ -53,7 +53,8 @@ export function createSourceBrowser(deps: Dependencies) {
   async function load(ref: NonNullable<ReturnType<typeof archiveReference>>) {
     if (blocked('hash', ref.hash))
       return { archive: null, error: 'Source archive is unavailable.' } as const;
-    const key = ref.url.href;
+    // A standard source URL can stay unchanged across signed revisions.
+    const key = JSON.stringify([ref.url.href, ref.hash]);
     for (const [key, entry] of cache) {
       if (entry.expires <= Date.now()) {
         cacheBytes -= entry.size;

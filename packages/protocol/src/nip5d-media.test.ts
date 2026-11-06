@@ -53,6 +53,13 @@ test('a preview video is ignored when several standard preview tags are present'
   expect(manifestPreviewVideo(event([preview]))).toEqual({ hash: a, mime: 'video/webm' });
   expect(manifestPreviewVideo(event([preview, ['preview', `x ${b}`, 'm video/webm']]))).toBeNull();
   expect(manifestPreviewVideo(event([['preview', `x ${a}`, 'm video/mp4']]))).toBeNull();
+  for (const second of [
+    ['preview'],
+    ['preview', 'broken'],
+    ['preview', `x ${b}`, `x ${c}`, 'm video/webm'],
+    ['preview', b, 'video/webm'],
+  ])
+    expect(manifestPreviewVideo(event([preview, second]))).toBeNull();
 });
 
 test('the earlier Soy presentation convention remains readable', () => {

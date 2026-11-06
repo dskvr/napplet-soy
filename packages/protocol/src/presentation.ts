@@ -85,9 +85,10 @@ export function manifestScreenshots(event: TaggedEvent): ManifestIcon[] {
 }
 export function manifestPreviewVideo(event: TaggedEvent): PresentationClaim | null {
   // NIP-5D: if multiple preview tags are present, ignore the preview.
-  const standardTags = event.tags.filter((t) => t[0] === 'preview' && nip5dMediaFields(t));
-  if (standardTags.length > 1) return null;
-  if (standardTags.length === 1) return standardClaims(event, 'preview', ['video/webm'])[0] ?? null;
+  const previewTags = event.tags.filter((t) => t[0] === 'preview');
+  if (previewTags.length > 1) return null;
+  if (previewTags.length === 1 && nip5dMediaFields(previewTags[0]))
+    return standardClaims(event, 'preview', ['video/webm'])[0] ?? null;
   return claims(event, 'preview', ['video/webm'], 1)[0] ?? null;
 }
 

@@ -24,7 +24,8 @@ it omits the recommended `dim` field for screenshots.
 Readers accept both forms from every publisher. Standard entries keep tag order;
 malformed, repeated-`x` and unsupported-format entries are ignored without hiding
 usable ones. An entry without a supported `m` is unusable here because this client
-verifies the declared format. More than one standard `preview` tag ignores the clip.
+verifies the declared format. More than one `preview` tag ignores the clip, including malformed or legacy tags
+alongside a standard tag.
 `source`, `source-commit` and `source-archive` are ignored when malformed or
 repeated, as NIP-5D requires; `source` accepts `http`, `https`, `ssh`, `git`,
 `nostr` and scp-like Git locations.
