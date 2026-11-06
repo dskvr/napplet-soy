@@ -95,6 +95,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@napplet/shim@0.35.0": "packages/runtime/patches/@napplet%2Fshim@0.35.0.patch",
+  },
   "packages": {
     "@apocentre/alias-sampling": ["@apocentre/alias-sampling@0.5.3", "", {}, "sha512-7UDWIIF9hIeJqfKXkNIzkVandlwLf1FWTSdrb9iXvOP8oF544JRXQjCbiTmCv2c9n44n/FIWtehhBfNuAx2CZA=="],
 

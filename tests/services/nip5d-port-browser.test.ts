@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test';
-import { chromium, expect as browserExpect } from '@playwright/test';
+import { expect as browserExpect, type Browser } from '@playwright/test';
+import { browserEngine } from '../../apps/cli/src/browser';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -116,7 +117,7 @@ test('the website player binds every napplet to its port and removes replaced or
   });
   const logs = new Response(child.stderr).text(),
     stdout = new Response(child.stdout).text();
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  let browser: Browser | undefined;
   try {
     let ready = false;
     for (let i = 0; i < 100 && !ready; i++) {
@@ -126,7 +127,7 @@ test('the website player binds every napplet to its port and removes replaced or
       if (!ready) await Bun.sleep(100);
     }
     if (!ready) throw new Error('Website test server did not start');
-    browser = await chromium.launch();
+    browser = await (await browserEngine()).chromium.launch();
     let page!: Awaited<ReturnType<typeof browser.newPage>>;
     const violations: string[] = [];
     // Each napplet starts from a fresh browser context, like a cold shared link.

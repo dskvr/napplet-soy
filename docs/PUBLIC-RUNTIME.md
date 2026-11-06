@@ -61,6 +61,13 @@ Named/root manifests retain their existing author/address/build storage and sett
 
 The browser injects the published **@napplet/shim 0.35.0** prelude, with transitive **@napplet/nap 0.36.0** and **@napplet/core 0.37.0** pinned in the lockfile. Before it runs, the bootstrap removes the napplet realm's `RTC*` constructors. These are protocol bindings, not another catalog: discovery remains Applesauce queries against Nostr relays. The shim is loaded with the player route, not by executing an external script inside a napplet.
 
+The pinned global bundle includes a local dependency patch in
+`packages/runtime/patches`. It captures native port-send and message-data access
+before napplet code runs, so replacing browser prototypes cannot expose the private
+transport port. Chromium regressions exercise both interception routes against the
+actual installed bundle; the same bundle is used by the website and soyLI previews.
+Remove this patch only after an upstream replacement passes those regressions.
+
 The shim provides the [NAP-SHELL handshake](https://github.com/napplet/naps/blob/master/naps/NAP-SHELL.md) over the port. `shell.ready` establishes one session; `shell.init` replies once; `shell.ready()`, `onReady()`, `supports()` and `services` expose its environment. Unknown message types are silently ignored before quota accounting; recognized operations can still return policy errors. The host accepts one `napplet.hello` from the created frame's `contentWindow`, with an opaque origin and exactly one port, and binds the verified identity to that port. It never replies through the frame `Window`. Messages cannot choose a different author, build, account, or storage namespace.
 
 References: [NAP registry and web projection](https://github.com/napplet/naps), [upstream implementation](https://github.com/napplet/web/tree/1df6dc87e5eee7257af41efb6247d47ec019e3d8/packages), and [NIP-5D proposal](https://github.com/nostr-protocol/nips/pull/2303). Several domains remain draft contracts. This is an implemented playback profile, not a claim of complete registry conformance.
