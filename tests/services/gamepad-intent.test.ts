@@ -1,13 +1,15 @@
 import { expect, test } from 'bun:test';
 import { expect as browserExpect, type Browser } from '@playwright/test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { finalizeEvent } from 'nostr-tools';
 import { browserEngine } from '../../apps/cli/src/browser';
 import { sha256 } from '../../packages/protocol/src/artifact';
 import { PLAYER_ALLOW } from '../../packages/runtime/src';
 
-test('CLI intent targets deny the original native reader and expose brokered NAP and compatibility APIs', async () => {
-  const artifact = '<button>Focus target</button>';
-  const hash = await sha256(new TextEncoder().encode(artifact));
+async function bundleIntentClient() {
+  const output = await mkdtemp(join(tmpdir(), 'soy-gamepad-intent-'));
   const entry = new URL('../../apps/cli/src/preview/intent-client.ts', import.meta.url).pathname;
   // Build in a fresh process, as previewAssets does: the test runner has already
   // resolved server-side dependencies whose browser exports differ.
@@ -17,7 +19,7 @@ test('CLI intent targets deny the original native reader and expose brokered NAP
       '-e',
       `
     const build = await Bun.build({
-      entrypoints: [${JSON.stringify(entry)}], target: 'browser', format: 'esm',
+      entrypoints: [${JSON.stringify(entry)}], outdir: ${JSON.stringify(output)}, target: 'browser', format: 'esm',
       plugins: [{
         name: 'raw-prelude',
         setup(build) {
@@ -31,17 +33,25 @@ test('CLI intent targets deny the original native reader and expose brokered NAP
       }],
     });
     if (!build.success) { console.error(build.logs); process.exit(1); }
-    process.stdout.write(await build.outputs[0].text());
   `,
     ],
-    { stdout: 'pipe', stderr: 'pipe' },
+    { stdin: 'ignore', stdout: 'ignore', stderr: 'pipe' },
   );
-  const [exitCode, script, errors] = await Promise.all([
-    build.exited,
-    new Response(build.stdout).text(),
-    new Response(build.stderr).text(),
-  ]);
-  expect(exitCode, errors).toBe(0);
+  const timer = setTimeout(() => build.kill('SIGKILL'), 15000);
+  try {
+    const [code, errors] = await Promise.all([build.exited, new Response(build.stderr).text()]);
+    expect(code, `Failed to bundle intent client: ${errors}`).toBe(0);
+    return await Bun.file(join(output, 'intent-client.js')).text();
+  } finally {
+    clearTimeout(timer);
+    await rm(output, { recursive: true, force: true });
+  }
+}
+
+test('CLI intent targets deny the original native reader and expose brokered NAP and compatibility APIs', async () => {
+  const artifact = '<button>Focus target</button>';
+  const hash = await sha256(new TextEncoder().encode(artifact));
+  const script = await bundleIntentClient();
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,

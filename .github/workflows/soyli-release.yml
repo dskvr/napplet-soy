@@ -55,7 +55,8 @@ jobs:
           bash .github/scripts/ubuntu-mirror.sh
           bunx playwright install --with-deps chromium
           bun test tests/services/intent-browser.test.ts
-          bun test tests/services/gamepad-shim.test.ts tests/services/gamepad-intent.test.ts tests/services/controllers.test.ts
+          bun test tests/services/gamepad-intent.test.ts
+          bun test tests/services/gamepad-shim.test.ts tests/services/controllers.test.ts
 
   build:
     needs: check
