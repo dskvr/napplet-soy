@@ -23,7 +23,8 @@ import {
   Zap,
 } from 'lucide-react';
 import type { GallerySearch } from '../../../../packages/protocol/src';
-import { matchesGallery } from '../../../../packages/protocol/src/topics';
+import { PlayingNow } from './playing-now';
+import { isGame, matchesGallery } from '../../../../packages/protocol/src/topics';
 import { socialScope } from '../../../../packages/protocol/src/social';
 import {
   hasPublicPreview,
@@ -79,7 +80,8 @@ const sections = [
 export function gamegridCatalogSearch(search: GamegridSearch): GallerySearch {
   return {
     q: search.q,
-    tag: 'game',
+    gamesOnly: true,
+    tag: '',
     sort: 'new',
     page: search.q || search.section === 'games' ? search.page : 1,
     unavailable: false,
@@ -229,7 +231,7 @@ export function Gamegrid({
   const catalogSearch = gamegridCatalogSearch(search);
   const refresh = useProtocolRefresh(
     'gamegrid',
-    () => queryCatalog(),
+    () => queryCatalog(undefined, { gamesOnly: true }),
     () => setRefreshVersion((value) => value + 1),
   );
   const catalog = refreshVersion ? browseProtocol(catalogSearch) : initial;
@@ -285,7 +287,7 @@ export function Gamegrid({
                   ? { type: 'address', naddr: item.naddr }
                   : { type: 'snapshot', id: item.id },
               ));
-            if (found?.topics.includes('game')) entries[index] = found;
+            if (found && isGame(found)) entries[index] = found;
           } catch {
             /* A removed or unreachable recent game remains optional history. */
           }
@@ -494,6 +496,7 @@ export function Gamegrid({
     <div className="gamegrid" ref={root} data-playing={!!playing}>
       <h1 className="sr-only">Gamegrid</h1>
       <div className="gg-viewport" ref={viewport} data-gamegrid-scroll data-gamegrid-nav="grid">
+        {!searching && !playing && search.section === 'discover' && <PlayingNow grid />}
         {search.q &&
         catalog.matches === 0 &&
         !visibleCollections.some((collection) => collection.entries.length) ? (

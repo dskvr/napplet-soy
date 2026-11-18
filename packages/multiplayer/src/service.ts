@@ -144,6 +144,7 @@ export async function startBackend(options: {
     throw error;
   }
   const server = createMatchmakingServer(undefined, {
+    provider: pubkey,
     dynamic,
     boards,
     rooms: new Rooms(Date.now, 1000, options.maxPeers ?? 8),

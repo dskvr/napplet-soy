@@ -3763,3 +3763,11 @@ dialog[data-shell-layer]::backdrop {
   padding: .5rem 1rem; background: var(--card); border-top: 1px solid var(--border);
   max-height: 20dvh; overflow: auto; flex: 0 0 auto;
 }
+
+.playing-now {container-type:inline-size; margin-block:1.5rem;}
+.playing-now ul {padding:0; margin:0; list-style:none;}
+.playing-now li {display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding-block:.65rem; border-bottom:1px solid currentColor; overflow-wrap:anywhere;}
+.playing-now small {display:block;}
+.playing-now a {white-space:nowrap; padding:.5rem; text-decoration:underline;}
+.gg-live {padding-inline:1rem; color:inherit;}
+@container (max-width: 24rem) {.playing-now li {align-items:start; flex-direction:column;}}
