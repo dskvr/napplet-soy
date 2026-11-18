@@ -175,6 +175,14 @@ export async function startBackend(options: {
       },
     })),
   }));
+  transport.addListToolsAnnouncementTagsProducer(({ tools }) =>
+    tools.length
+      ? [
+          ...tools.map((tool) => ['i', computeCommonSchemaHash(tool), tool.name]),
+          ['k', 'io.contextvm/common-schema'],
+        ]
+      : [],
+  );
   try {
     await server.connect(transport);
   } catch (error) {
