@@ -532,3 +532,57 @@ republishing without score reset, and remix isolation. Run both the upstream
 conformance suite and `soyli check`; capability presence alone does not prove an
 entire game works. The local upstream reference shell may expose a different
 capability profile; the soyLI preview is the target host.
+
+### Optional realtime delivery (proposal #145)
+
+Reliable ordered `webrtc.send()` stays the default. A host implementing
+NAP-WEBRTC #145 (`69b8f0b367e3e204ce522b5369d446974b11459a`) can open a separate
+`{ordered:false, maxRetransmits:0}` session for replaceable state. Inspect actual
+returned settings; keep start/end/lobby and one-shot actions on reliable control.
+Use monotonic ticks/sequences, reject stale updates and coalesce obsolete state
+under backpressure. Local prediction and reconciliation still matter.
+
+The optional injected `webrtc.sendBytes(id, canonicalBase64)` produces `bytes`
+events, separate from JSON `message` events. Prefer an SDK exposing this operation;
+SDKs that predate it need a narrowly typed optional injected-domain adapter, never
+an application-owned MessagePort or signaling bypass. Check both binding and
+peer application capabilities. Respect advertised `maxPayloadBytes` (Soy: 16 KiB).
+`unsupported` and `QUEUE_FULL` send nothing; a timeout is delivery-unknown, so do
+not resend that same binary payload as JSON. A success is only locally queued.
+One departing peer does not imply the room has closed. Guest `from` keys are
+transport identities, not verified profile identities. Statistics are optional.
+
+Soy's signed `soy-rtc/realtime-1` capability negotiation is a host implementation
+choice, not an accepted upstream cross-shell signaling contract. Other shells
+may provide the same API using different signaling.
+
+## Playing now: opt-in public room directory
+
+`soy.room-directory.v1` is a provider tool contract, not a new NAP. Discover it
+on a configured provider or call its tools over NAP-CVM. In-game room lists and
+queues never opt anyone into the directory. Ask the host separately before listing.
+A listing is a public rendezvous, not a secret invitation or a claim of authorship.
+
+1. Create the ordinary listed room, then call `soy_room_advertise` with
+   `{room, listing:{title, phase:"lobby", accepting:true, badges:["Map name"]}}`.
+   Only the original active host can update it. Update phase/accepting on match
+   transitions; withdraw with `listing:null`. Never reuse internal titles carrying
+   peer IDs. Three short text badges maximum; no URLs, credentials, or player roster.
+2. Any shell can call `soy_room_directory({limit,after?})` on that provider.
+   Its `rooms` contain public details, player count, capacity, Unix millisecond
+   host lease expiry and an `entry`; `next` is a cursor or null. Omit expired
+   records; reads never create or renew membership. Resolve game title and
+   eligibility from the verified manifest. The address has no relay hints.
+3. A lobby napplet may invoke the proposed `napplet:game/join` convention with
+   `{version:1,provider,napplet,protocol,room}`, targeting the user-selected game.
+   A native shell is not a sending napplet. napplet.soy instead passes this same
+   value as JSON under the instance-only NAP-STORAGE key `soy.room-entry.v1`
+   when opening the exact user-selected game (local convention, not NAP-INTENT).
+   Consume and remove it once. Validate provider, game, version and protocol, ask
+   before admission, then call `soy_room_enter(entry)`. This checks capacity,
+   visibility and the complete tuple again. Never fall back to another provider.
+4. Provide manual entry and ordinary room browsing. Older providers may not
+   implement the directory; keep gameplay working and explain listing failure.
+   Do not offer a spectator action without a supported spectator role. Test two
+   guests, unlisted rooms, expired/full rooms and a mismatched target/provider
+   against the isolated preview CVM, not a public relay.

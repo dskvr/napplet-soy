@@ -1,5 +1,102 @@
 # NAP concepts and expansion review
 
+## Experimental NAP-LLM reference — not deployed
+
+The optional [NAP-LLM draft](proposals/NAP-LLM.md) and [reference implementation](LLM.md)
+provide user-selected inference through the shell and soyLI preview. This is a
+proposal, not an accepted NAP. Its contract is pinned to upstream PR #134 at
+`5e93bdfce0e84c0de728234cb7b3feed498f8635`. It uses the pinned shim’s private
+port, with a reviewed block-delta patch; NIP-5D transport follows `c041f84`.
+Sandbox policy and equal publisher treatment remain unchanged. Provider keys stay
+outside frames; optional inference never becomes a playback requirement. The coordinated release also includes [native CVM checkout](LLM-CVM.md) through
+ContextVM SDK 0.14.3 and NAP-CVM at `28cf1bdb5c6412bfbfcecb79a5a5121e18376f2f`.
+No VALUE amendment or iframe wallet API is added. See the [rollout checklist](LLM-CVM-ROLLOUT.md).
+
+## NIP-5D port-bound identity — 2026-11-02 source
+
+Not yet released or deployed. Authority for Transport, Identity and Security is now
+NIP-5D PR 2303 head `c041f84667c1781c3c1d5bfbd970943131b38cc9` (dskvr/nips PR 14 and
+PR 15). The manifest reader and fresh publisher also follow the PR 9/10/12
+source/presentation fields at this pin; see [PROTOCOL.md](PROTOCOL.md).
+Runtime profile `space-playback-8` identifies this change.
+
+| Upstream item                                                          | Our response                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| PR 14: identity bound to the `napplet.hello` port                      | Shared host binds the port and sends nothing via `iframeWindow.postMessage`    |
+| PR 14: revoke on second hello, window message, second load, port close | Implemented; `messageerror` and `close` count as port failure                  |
+| PR 15: `close()` is the load-bearing teardown step                     | Every teardown path closes the port, including normal `close()`                |
+| PR 15: bootstrap must not leave the port reachable                     | Port stays in the shim's closure; `NappletShimPrelude` exposes only installers |
+| PR 16: `referrerpolicy="no-referrer"`                                  | Already set on every napplet frame, plus a `no-referrer` meta                  |
+| PR 16: resolve by author pubkey and `d`                                | Already enforced by manifest resolution                                        |
+| PR 16: state keyed by at least author pubkey and `d`                   | Already enforced; host identity starts with the publisher pubkey               |
+| PR 16: plain-text manifest strings                                     | Already rendered as text                                                       |
+| PR 16: cap icon/media bytes and pixels before decoding                 | Already enforced from verified headers                                         |
+| PR 16/17: interim WebRTC constructor removal                           | Adopted ahead of merge; see [PROTOCOL.md](PROTOCOL.md)                         |
+| kehto/web#382: host-page `frame-src` lock                              | Website drops `blob:`; local preview uses `'none'` outside the workshop        |
+
+Packages move to `@napplet/shim` 0.35.0 with core 0.37.0 and nap 0.36.0, published
+2026-11-01 from napplet/web `627f433`. The npm `prelude.global.js` is byte-identical
+to a local build of that commit. The shim's own NAP-SHELL replaces our former
+supplement with the same semantics. Intermediate releases only add domains we do not
+inject (GAMEPAD, LLM) and maturity metadata. The independent acceptance fixture moves
+to Paja 0.29.0, kehto's port-bound host with the same frame lock and WebRTC removal.
+
+Verification:
+
+- Host unit tests cover each revocation reason, port-only replies, pre-hello traffic
+  and transferred-port use after revocation.
+- The real CLI check, with Chromium, rejects window-level NAP, a second hello and
+  self-reload with `NAPPLET_REVOKED`. It reports a blocked pre-load `blob:` navigation
+  as a CSP violation and confirms no `RTC*` global remains.
+- The production website player binds a napplet over its port. It stops legacy and
+  reloading napplets, including after "Try again", and blocks a pre-load `blob:`
+  escape. The same test fails on unchanged `main`, which exposes 24 `RTC*` globals
+  and keeps a legacy napplet running.
+- Independent Paja 0.29.0 acceptance passes all four current-manifest cases.
+- Nix, in an aarch64-linux container without the build sandbox: the new
+  `nodeModules` hash builds and rebuilds identically, and `soyli` builds. The
+  `soyli` rebuild differs between runs here, exactly as on unchanged `main` in the
+  same container. The x86_64 CI and its NixOS VM checks have not yet run.
+
+Catalog impact, measured with a static scan of every artifact on `relay.napplet.soy`:
+
+| Measure                                      | Count      |
+| -------------------------------------------- | ---------- |
+| Napplet manifest events                      | 653        |
+| Distinct artifacts fetched and hash-verified | 332 of 335 |
+| Current listings                             | 219        |
+| Current listings that post at window level   | 50         |
+| Publishers of those listings                 | 12         |
+
+None of the affected listings are ours. Most bundle an older shim that sends
+`shell.ready`, or an SDK that asks for `theme.get` at window level. A match means the
+code is present, not that every path runs it. Under NIP-5D these napplets are stopped
+when they post; their authors must republish with a current SDK. The scan corpus is
+local working data and is not committed.
+
+## Compliance corrections — deployed and released 2026-10-28
+
+The selected NIP-5D authority remains `4d0fb2e9fa1fdca71be09b17a4c5f382fbca5d51`.
+The SHELL clarification at `25b29ee49e5bff8ebfe031f4b76dce98705c8b7e` confirms
+that optional discovery must not gate other domains. Host dispatch and namespace
+availability now work before `shell.ready`; source-window/origin validation,
+account retirement and domain-specific cold INTENT delivery remain intact.
+
+Napplet-owned audio uses the already selected NAP-MEDIA Wire Protocol at
+`2b2d29e90c30b994bf5035a65b57e5fe7f08a9a2`, compatible with the installed shim
+0.31.0 / core and nap 0.33.0. Canonical session IDs, owner-directed state and
+commands, advertised controls, cooperative focus and cleanup are implemented.
+No new wire aliases, NAP-CLASS escape hatch or iframe network permission is added.
+The newer MEDIA revision `7806f43` is a comparison, not an adopted contract.
+
+Runtime profile `space-playback-7` identifies these corrections. The intentional
+Nostr source amendment and `soy.app-data/1` convention remain unchanged. See the
+[dated audit](NIP5D-COMPLIANCE-AUDIT-2026-10-27.md), [media policy](MEDIA.md) and
+[check coverage](PUBLISHING.md#source-and-sandbox-checks). The compatible host is
+deployed and soyLI 0.31.4 is released; see the
+[rollout evidence](DEPLOYMENT.md). Regression success does not qualify every
+published napplet or another host's implementation.
+
 ## OUTBOX integration — released 0.29.0
 
 The subsequent implementation completes the foundation below with a shared verified
@@ -63,9 +160,24 @@ in `20261009091435416-91120` on 2026-10-09; source/native/Nix, target service
 checks and live desktop/mobile gallery plus exact historical-byte checks pass.
 See [release evidence](CLI-RELEASES.md).
 
+## Presentation compatibility follow-up — 2026-11-09 source
+
+Live PR 2303 still points to `c041f84667c1781c3c1d5bfbd970943131b38cc9`.
+The standard presentation reader accepts missing, malformed or repeated optional
+MIME metadata, verifies the signed digest, then admits only bounded PNG/JPEG/WebP
+or supported WebM bytes. Any valid MIME declaration must match. NIP-5D permits any
+number of screenshots; this client reads the first eight usable claims in order.
+Multiple raw preview tags suppress the clip, including malformed extras.
+
+Fresh jobs already write standard fields. The single selected publishing cover,
+old `soy.presentation/1` readers, descriptor readers and frozen signatures remain
+unchanged. Focused regressions cover optional MIME, unsupported bytes, ordering,
+overflow and old publication resume. These refinements are local source changes;
+deployment and standalone CLI release remain separate from verification.
+
 ## Direct presentation review — 2026-10-06
 
-The authoritative NIP-5D pin remains `4d0fb2e9fa1fdca71be09b17a4c5f382fbca5d51`.
+At this historical review the NIP-5D pin was `4d0fb2e9fa1fdca71be09b17a4c5f382fbca5d51`.
 It defines hash/MIME icons but no screenshot/video fields. Reviewed
 [napplet/web PR 111](https://github.com/napplet/web/pull/111) at
 `6dd79febfa9807d5d3f51cabd77b793f5893d4b7`: that draft uploads screenshots using
@@ -195,9 +307,9 @@ and Chromium grants the `gamepad` feature to all frames by default. Napplets pla
 side by side therefore all received the same controller input. Player frames now
 deny it in `PLAYER_ALLOW`, along with `browsing-topics`, `interest-cohort`,
 `private-state-token-*`, `storage-access` and `deferred-fetch-minimal`. The shell
-brokers focus-scoped snapshots through the merged upstream [NAP-GAMEPAD draft](NAP-GAMEPAD.md)
+brokers focus-scoped snapshots through the proposed upstream [NAP-GAMEPAD draft](NAP-GAMEPAD.md)
 and adds `gamepad` to the advertised domains. A prelude shim keeps the standard API
-working for unmodified games. It was merged upstream as [napplet/naps#108](https://github.com/napplet/naps/pull/108); see the 2026-10-15 pin below. The shim, SDK and NIP-5D pins
+working for unmodified games. It was proposed upstream in [napplet/naps#130](https://github.com/napplet/naps/pull/130); see the 2026-10-15 pin below. The shim, SDK and NIP-5D pins
 are unchanged. This supersedes the next paragraph's "no NAP domain" statement. Not
 deployed.
 
@@ -568,10 +680,10 @@ and the existing shim 0.30.0. No event kind, manifest extension, author restrict
 or NIP-5D pin changes. All publishers receive the same frame-scoped action API.
 See [runtime behavior, limits and shim normalization caveat](PUBLIC-RUNTIME.md#keyboard-actions--2026-10-13-source).
 
-## NAP-GAMEPAD merged-contract review — 2026-10-15
+## NAP-GAMEPAD draft review — 2026-11-18
 
-Reviewed [NAP-GAMEPAD](https://github.com/napplet/naps/blob/19de5ce1cea40cd4c76089cdd8126e9f87648049/naps/NAP-GAMEPAD.md) at
-`19de5ce1cea40cd4c76089cdd8126e9f87648049` (merged PR #108; specification
+Reviewed [NAP-GAMEPAD](https://github.com/napplet/naps/blob/0b28f77e3dfa0f07dd7c0f9d61a7090ee99f3a5e/naps/NAP-GAMEPAD.md) at
+`0b28f77e3dfa0f07dd7c0f9d61a7090ee99f3a5e` (open PR #130; specification
 status remains draft). The shared web/CLI host implements its notification-only
 subscribe/unsubscribe/state contract and standard binding independently of native
 API replacement. Native access is denied through player Permissions-Policy;
@@ -579,3 +691,60 @@ unfocused frames receive neutral values and timestamps. Required `gamepad` is
 supported by capability admission; creator guidance recommends fallback controls.
 All publishers use the same host. No NIP-5D identity or SDK pin changes.
 See [implementation and verification limits](NAP-GAMEPAD.md).
+
+## Contribution graph — 2026-10-25
+
+Reviewed official [NIP-57 Appendix A](https://github.com/nostr-protocol/nips/blob/master/57.md#appendix-a-zap-request-event)
+and [NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md) for contribution
+targeting: event tips carry the selected event ID and recipient key; NIP-57's
+address tag is optional. The existing signed NIP-34 root/status projection and
+NIP-5D publication history supply the visualization; no selected upstream pin or
+writer contract changes. Named-release Lightning tips can be scoped to an exact
+version, while existing listing-wide zaps retain their address scope. Signed
+regressions cover wrong authors, versions, inherited addresses and recovery.
+Graph edges distinguish signed merge claims from verified Git ancestry. This source
+review is not independent interoperability certification. Deployment verification
+is recorded in [DEPLOYMENT.md](DEPLOYMENT.md#most-recent-application-deployment--contribution-graph-2026-10-25).
+
+## Experimental FIPS resource profile — 2026-11-10, not deployed
+
+[Contract mapping and evidence](FIPS-RESOURCES.md) records the shared web/soyLI
+implementation of `soy.fips/1`, with a matching injected binding and network-free
+application adapter. OUTBOX remains the standard discovery surface. The installed
+RESOURCE Blob/`requests` binding remains unchanged; current PR 80's base64/`urls`
+text is not silently adopted. MESH PR 122 does not provide public blob bodies or
+Atlas operation RPC. Exact compatible pins and remaining standardization gaps
+are in that mapping. No new standard NAP name or manifest domain is advertised.
+
+Public roots/providers require shell approval without login; verified descendant
+reads and root-pinned Atlas v1 operations use separate permissions. Opaque frames,
+private ports, equal publisher policy and existing NIP-5D identity remain intact.
+Frame/account changes revoke grants, transport identities and cached authority.
+The Atlas companion imports no dormant direct-network implementation. This is
+experimental source integration, not independent-shell conformance or rollout.
+
+## WebRTC #145 review — 2026-11-11
+
+Reviewed proposal #145 and parent #59, including updated discussions. #145 advanced to
+`69b8f0b367e3e204ce522b5369d446974b11459a`, parent head
+`fb4dd6f0e6294e1837733d2af61931e3e114bd97`. Implemented delivery controls,
+separate binary operation/events, payload advertisement, advisory RTT and
+authenticated peer attribution. NIP-5D authority is unchanged.
+
+[Contract and acceptance record](WEBRTC-REALTIME.md) separates proposal fields
+from Soy-owned capability negotiation, broadcast queue policy and compatibility.
+In particular, no timeout-triggered duplicate JSON send, no implicit peer downgrade,
+no invented loss statistic, and no durable-profile claim for guest keys.
+Implementation and local verification do not constitute deployment or independent
+shell interoperability.
+
+## Local NAP-WEBMCP reference — 2026-11-13
+
+Experimental `soy.webmcp/1` implements typed app-to-shell registration, correlated
+calls/results, cancellation, separate exposure grants and optional browser
+projection. This is our implementation choice, not an upstream accepted domain.
+No new iframe permission or channel is introduced. Browser API review pin:
+`webmachinelearning/webmcp@56b8e7a74a312c4298858f8211388a536b835339`.
+The selected NIP-5D authority remains unchanged. Public implementation behavior and
+bounds are in [WEBMCP.md](WEBMCP.md); a future upstream proposal must retain its own
+normative/implementation distinction and keep reference links in the PR discussion.

@@ -38,7 +38,7 @@ soyli dev
 macOS or Linux, with Git installed. No separate Bun or Node installation required.
 Follow the installer's PATH instruction if prompted, then open the preview URL it
 prints. See [requirements and troubleshooting](docs/CLI.md#requirements-and-storage).
-On Linux with Nix, `nix run github:zeSchlausKwab/napplet-soy -- new my-napplet` works
+On Linux with Nix, `nix run github:soytec/napplet-soy -- new my-napplet` works
 too, and NixOS has a module; see [soyLI with Nix](docs/NIX.md).
 
 Open the project with your coding agent and describe what you want. For example:
@@ -65,7 +65,7 @@ propose or push.
 
 After installation, `soyli doctor` checks for a newer release and `soyli update`
 installs it. Older CLIs without `update` can use the installer on the
-[latest GitHub release](https://github.com/zeSchlausKwab/napplet-soy/releases/latest).
+[latest GitHub release](https://github.com/soytec/napplet-soy/releases/latest).
 [Release and update details](docs/CLI-RELEASES.md). Nix installations update through
 their flake input instead.
 
@@ -140,7 +140,8 @@ soyli review
 
 The review workbench lists proposals, runs the original and proposed versions, and
 shows the diff and discussion. Accepting merges locally. `soyli push` shares the
-Git update; `soyli publish` releases the improved napplet. Ordinary Git and ngit
+Git update; `soyli publish` releases the improved napplet and marks included
+proposals merged after hosted source delivery, without a separate push. Ordinary Git and ngit
 remain available. [Full collaboration workflow](docs/COLLABORATION.md).
 
 ## Open source. Open infrastructure.
@@ -189,8 +190,23 @@ Want to improve napplet.soy itself? This repository is the shell, soyLI and the
 supporting services. Bug reports, docs, fixes and new ideas are welcome.
 Making a napplet does **not** require checking out this repository.
 
+The shell and Studio share their color, font-family and layout tokens in
+[`packages/runtime/src/appearance.css`](packages/runtime/src/appearance.css).
+Web font files are loaded in `apps/web/src/styles.css`; component layouts stay
+with their components. These styles do not constrain napplet artwork.
+
 <details>
 <summary><strong>Local development and verification</strong></summary>
+
+For just the website with hot reload:
+
+```sh
+bun install --frozen-lockfile
+bun run dev:site
+```
+
+Open [127.0.0.1:3000](http://127.0.0.1:3000). This starts only the web dev server;
+it does not start PM2 or the local relay, Blossom, GRASP and backend services.
 
 The platform toolchain needs Bun **1.3.11**, Node **18+** for PM2, Git, Go, Rust
 **1.97.1** and a C compiler. The relay tooling selects Go **1.25.0** automatically.
@@ -221,6 +237,8 @@ Service changes also have focused `test:relay`, `test:blossom`, `test:grasp`,
 browser; see the guides below for setup and toolchain details.
 
 [Local development](docs/LOCAL-DEVELOPMENT.md) ·
+[Hosted Studio (BYOK)](docs/STUDIO-HOSTING.md) ·
+[Local creation studio](docs/QUICK-VIBE.md) ·
 [Public discovery in development](docs/PUBLIC-DEVELOPMENT.md) ·
 [Web architecture](docs/WEB-ARCHITECTURE.md) ·
 [CLI builds and releases](docs/CLI.md#building-and-releasing)

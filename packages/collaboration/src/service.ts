@@ -1,3 +1,4 @@
+import { prepareAppliedStatuses, deliverAppliedStatuses } from './applied';
 import { ASSET_LOCK, parseAssets } from '../../assets/src';
 import { DiagnosticError } from '../../diagnostics/src';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -29,6 +30,7 @@ import {
 } from './protocol';
 import { mergeReviewed, selectCloneUrls } from './git';
 import { deliverProposal, publishBranch } from './transport';
+import type { ProposalProgress } from './progress';
 
 export type CollaborationOptions = {
   directory: string;
@@ -132,11 +134,15 @@ export async function propose(
     resume?: boolean;
     check: PublishOptions['check'];
     checkpoint?: (phase: 'source' | 'proposal') => Promise<void>;
+    onProgress?: ProposalProgress;
+    /** Optional browser review boundary. CLI callers retain their ordinary workflow. */
+    expectedReview?: { commit: string; fingerprint: string; repository: string };
   },
 ) {
   if (!options.resume && (!options.description.trim() || options.description.length > 8000))
     throw new Error('Provide a proposal description of 1–8000 characters.');
   const accounts = await captureAccount(options.accounts ?? new Accounts(options.network));
+  await options.onProgress?.('check', 'Checking the reviewed revision and upstream repository.');
   const context = await collaborationContext({ ...options, accounts }),
     { client, targets, account, project, binding } = context;
   let signer: Awaited<ReturnType<Accounts['signer']>> | undefined;
@@ -154,6 +160,18 @@ export async function propose(
     ).slice(0, 16);
     const path = join(options.directory, '.napplet-space', 'proposals', `${key}.json`);
     return await new Journal(options.directory, options.network).lock(async () => {
+      if (options.expectedReview) {
+        const expected = options.expectedReview;
+        if (
+          repository.address !== expected.repository ||
+          (await committedSource(options.directory)) !== expected.commit ||
+          (await inspectProject(options.directory, options.network, account.pubkey)).fingerprint !==
+            expected.fingerprint
+        )
+          throw new DiagnosticError('REVIEW_CHANGED', 'The proposal changed after review.', {
+            recovery: 'Prepare and review the proposal again before submitting.',
+          });
+      }
       let saved: any;
       try {
         saved = JSON.parse(await readFile(path, 'utf8'));
@@ -199,6 +217,14 @@ export async function propose(
           throw new Error('Saved proposal identity, network or source mismatch. Keep the journal.');
       }
       const previousJournal = saved;
+      if (
+        saved &&
+        options.resume &&
+        options.expectedReview &&
+        (saved.commit !== options.expectedReview.commit ||
+          saved.event.content !== options.description)
+      )
+        throw new DiagnosticError('REVIEW_CHANGED', 'The saved proposal differs from this review.');
       if (!options.resume) {
         const commit = await committedSource(options.directory);
         let adopted = false;
@@ -284,6 +310,10 @@ export async function propose(
             options.network,
             account.pubkey,
           );
+          await options.onProgress?.(
+            'check',
+            'Checking the exact playable build before sharing it.',
+          );
           const checked = await options.check(inspected.contents);
           if (
             (await committedSource(options.directory)) !== commit ||
@@ -305,6 +335,10 @@ export async function propose(
           if ((await signer.getPublicKey()) !== account.pubkey)
             throw new Error('Signer identity changed.');
           const put = async (bytes: Uint8Array, type: string) => {
+            await options.onProgress?.(
+              'upload',
+              `Uploading and verifying ${type} (${Math.ceil(bytes.length / 1024)} KiB). Approve upload requests in your signer.`,
+            );
             await uploadBlob({
               origin: targets.blossom,
               bytes,
@@ -325,6 +359,10 @@ export async function propose(
           if (checked.preview) await durableFile(join(folder, 'preview.png'), checked.preview);
           const image = checked.preview ? await put(checked.preview, 'image/png') : undefined;
           const now = Math.max(Math.floor(Date.now() / 1000), (saved?.event.created_at ?? 0) + 1);
+          await options.onProgress?.(
+            'upload',
+            'Signing the playable preview with your selected account.',
+          );
           const manifest = await signExact(signer!, account.pubkey, {
             kind: 5129,
             created_at: now,
@@ -357,6 +395,10 @@ export async function propose(
           );
           await durableFile(join(folder, 'preview.json'), descriptor);
           const url = await put(descriptor, 'application/json');
+          await options.onProgress?.(
+            'sign',
+            'Approve the proposal signature in your selected signer.',
+          );
           const event = verifiedEvent(
             await signExact(signer!, account.pubkey, {
               kind: saved ? 1619 : 1618,
@@ -414,6 +456,15 @@ export async function propose(
       }
       if (saved.event.pubkey !== account.pubkey || saved.repository !== repository.address)
         throw new Error('Saved proposal identity mismatch.');
+      if (
+        options.expectedReview &&
+        (saved.commit !== options.expectedReview.commit ||
+          saved.event.content !== options.description)
+      )
+        throw new DiagnosticError(
+          'REVIEW_CHANGED',
+          'The signed proposal differs from this review.',
+        );
       // The signed event and real commit survive retries; no duplicate PR or changed preview.
       await deliverProposal({
         directory: join(saved.folder, 'source'),
@@ -424,6 +475,7 @@ export async function propose(
         local: options.network === 'local',
         signal: options.signal,
         checkpoint: options.checkpoint,
+        onProgress: options.onProgress,
       });
       saved.done = true;
       await atomic(path, saved);
@@ -627,6 +679,10 @@ export async function proposalAction(
 export async function pushSource(
   options: CollaborationOptions & {
     checkpoint?: (phase: 'git' | 'status') => Promise<void>;
+    /** Retry one already-reviewed UI operation, including an ambiguous successful response. */
+    resumeCompleted?: boolean;
+    /** UI confirmation binds source sharing to this exact committed tree. */
+    expectedCommit?: string;
   },
 ) {
   options = {
@@ -640,6 +696,11 @@ export async function pushSource(
     if (!account || !repository.maintainers.includes(account.pubkey))
       throw new Error('Only an announced repository maintainer can publish its branches.');
     const commit = await committedSource(options.directory);
+    if (options.expectedCommit && commit !== options.expectedCommit)
+      throw new DiagnosticError('REVIEW_CHANGED', 'The source commit changed after review.', {
+        operation: 'share reviewed source',
+        recovery: 'Prepare and review the current source before publishing it.',
+      });
     const { inspectHistory } = await import('../../publish/src/git-source');
     await inspectHistory(options.directory, commit);
     const branch = await sourceGit(options.directory, ['symbolic-ref', '--short', 'HEAD']);
@@ -671,7 +732,7 @@ export async function pushSource(
         throw new Error(
           'Finish the saved Git publication before publishing new commits. Restore its saved branch tip and rerun soyli push; keep the journal.',
         );
-      if (!saved || saved.done) {
+      if (!saved || (saved.done && (!options.resumeCompleted || saved.commit !== commit))) {
         const { state: previous, authors } = await readRepositoryState(client, repository);
         if (!authors.includes(account.pubkey))
           throw new Error(
@@ -689,36 +750,6 @@ export async function pushSource(
             'Upstream state has unsupported refs; use ngit without changing that state through soyLI.',
           );
         for (const [name] of refs) await sourceGit(options.directory, ['check-ref-format', name]);
-        const proposals = await readProposals(client, repository);
-        const included: Proposal[] = [];
-        for (const proposal of proposals.filter(
-          (p) => ['open', 'draft'].includes(p.status) && p.head && !p.patch,
-        )) {
-          // A missing object means it is not included. Other Git failures retain
-          // their causes rather than being misclassified as unrelated proposals.
-          try {
-            await sourceGit(options.directory, ['cat-file', '-e', `${proposal.head}^{commit}`]);
-          } catch (cause) {
-            if (cause instanceof DiagnosticError && cause.context.exitCode === 128) continue;
-            throw cause;
-          }
-          try {
-            await sourceGit(options.directory, [
-              'merge-base',
-              '--is-ancestor',
-              proposal.head!,
-              commit,
-            ]);
-          } catch (cause) {
-            if (cause instanceof DiagnosticError && cause.context.exitCode === 1) continue;
-            throw cause;
-          }
-          const declared =
-            tag(proposal.revision, 'target-branch') ?? tag(proposal.root, 'target-branch');
-          const defaultBranch = tag(previous, 'HEAD')?.replace(/^ref: refs\/heads\//, '');
-          if ((declared ?? defaultBranch) !== branch) continue;
-          included.push(proposal);
-        }
         signer = await options.accounts!.signer({
           signal: options.signal,
           onAuth: options.onAuth,
@@ -733,27 +764,16 @@ export async function pushSource(
           content: previous.content,
           tags: previous.tags.map((t) => (t[0] === ref ? [ref, commit] : t)),
         });
-        const statuses: SignedEvent[] = [];
-        for (const proposal of included)
-          statuses.push(
-            await signExact(signer, account.pubkey, {
-              kind: 1631,
-              created_at: Math.max(
-                now,
-                (proposal.statusEvent?.created_at ?? proposal.revision.created_at) + 1,
-              ),
-              content: 'Merged and published in Git.',
-              tags: [
-                ['e', proposal.root.id, '', 'root'],
-                ['e', proposal.revision.id, '', 'reply'],
-                ['a', repository.address],
-                ['p', proposal.root.pubkey],
-                ['p', repository.pubkey],
-                ['merge-commit', commit],
-                ['r', commit],
-              ],
-            }),
-          );
+        const statuses = await prepareAppliedStatuses({
+          directory: options.directory,
+          client,
+          repository,
+          previous,
+          branch,
+          commit,
+          signer,
+          pubkey: account.pubkey,
+        });
         saved = {
           version: 1,
           network: options.network,
@@ -799,56 +819,16 @@ export async function pushSource(
         signal: options.signal,
       });
       await options.checkpoint?.('git');
-      const inbox = new ProtocolClient(() => saved.relays);
-      const supersededProposals: string[] = [];
-      try {
-        for (const input of saved.statuses) {
-          const event = verifiedEvent(input);
-          if (
-            event.pubkey !== account.pubkey ||
-            event.kind !== 1631 ||
-            tag(event, 'a') !== repository.address ||
-            tag(event, 'merge-commit') !== commit
-          )
-            throw new Error('Saved applied status mismatch.');
-          const root = event.tags.find((t) => t[0] === 'e' && t[3] === 'root')?.[1];
-          const reviewed = event.tags.find((t) => t[0] === 'e' && t[3] === 'reply')?.[1];
-          if (!root || !reviewed) throw new Error('Saved applied status has no reviewed revision.');
-          // Git may already have been published on a previous attempt. A newer
-          // contribution must not be closed by that attempt's saved acceptance.
-          const proposal = (await readProposals(inbox, repository, root)).find(
-            (p) => p.root.id === root,
-          );
-          if (!proposal)
-            throw new Error('Proposal unavailable while checking its applied revision.');
-          if (proposal.revision.id !== reviewed) {
-            supersededProposals.push(root);
-            continue;
-          }
-          await inbox.publish(event, [], options.signal);
-          if (
-            !(await inbox.query([{ ids: [event.id], limit: 1 }], [], options.signal)).some(
-              (e) => e.id === event.id,
-            )
-          )
-            throw new Error('Applied status was acknowledged but is not queryable.');
-        }
-        await options.checkpoint?.('status');
-      } catch (cause) {
-        throw new DiagnosticError(
-          'PROPOSAL_STATUS_UNCONFIRMED',
-          'Git was published but proposal status is not confirmed.',
-          {
-            operation: 'confirm applied proposal status',
-            target: repository.address,
-            cause,
-            recovery:
-              'Rerun soyli push from the same commit to deliver the saved applied events. Do not repeat the merge.',
-          },
-        );
-      } finally {
-        inbox.close();
-      }
+      const supersededProposals = await deliverAppliedStatuses({
+        repository,
+        commit,
+        pubkey: account.pubkey,
+        statuses: saved.statuses,
+        signal: options.signal,
+        recovery:
+          'Rerun soyli push from the same commit to deliver the saved applied events. Do not repeat the merge.',
+      });
+      await options.checkpoint?.('status');
       saved.supersededProposals = supersededProposals;
       saved.done = true;
       await atomic(path, saved);

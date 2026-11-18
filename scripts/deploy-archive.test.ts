@@ -24,6 +24,18 @@ test('uploaded source starts the CLI and scaffolds its bundled creator guides', 
     // Reuse installed dependencies, but resolve every project import from the
     // extracted release, so local source files cannot hide packaging omissions.
     await symlink(join(root, 'node_modules'), join(release, 'node_modules'), 'dir');
+    // The server runs conformance checks from this archive before activation.
+    // Exercise the consumer import here so a checkout cannot mask missing files.
+    const conformance = Bun.spawn(
+      [process.execPath, 'test', 'packages/runtime/src/llm-conformance.test.ts'],
+      { cwd: release, stdout: 'pipe', stderr: 'pipe' },
+    );
+    const [conformanceCode, conformanceOut, conformanceError] = await Promise.all([
+      conformance.exited,
+      new Response(conformance.stdout).text(),
+      new Response(conformance.stderr).text(),
+    ]);
+    expect(conformanceCode, conformanceError || conformanceOut).toBe(0);
     async function cli(args: string[]) {
       const child = Bun.spawn(
         [process.execPath, join(release, 'apps/cli/src/index.ts'), ...args, '--json'],
@@ -75,6 +87,18 @@ test('uploaded source starts the CLI and scaffolds its bundled creator guides', 
     expect(await Bun.file(join(directory, 'example/docs/napplet-outbox.md')).text()).toBe(
       await Bun.file(join(root, 'docs/OUTBOX.md')).text(),
     );
+    expect(await Bun.file(join(directory, 'example/docs/napplet-fips.md')).text()).toBe(
+      await Bun.file(join(root, 'docs/FIPS-CREATOR.md')).text(),
+    );
+    expect(await Bun.file(join(directory, 'example/docs/napplet-webmcp.md')).text()).toBe(
+      await Bun.file(join(root, 'docs/WEBMCP.md')).text(),
+    );
+    expect(
+      await Bun.file(join(directory, 'example/docs/examples/fips-resource-client.ts')).text(),
+    ).toBe(await Bun.file(join(root, 'packages/resource-client/src/index.ts')).text());
+    expect(
+      await Bun.file(join(directory, 'example/docs/examples/coordinated-audio.ts')).text(),
+    ).toBe(await Bun.file(join(root, 'docs/examples/coordinated-audio.ts')).text());
     expect(await Bun.file(join(directory, 'example/docs/napplet-controllers.md')).text()).toBe(
       await Bun.file(join(root, 'docs/CONTROLLERS.md')).text(),
     );

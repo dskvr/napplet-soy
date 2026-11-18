@@ -1,3 +1,9 @@
+import { NappletTools } from './webmcp/session';
+import { shellActivity } from './shell-ui';
+import { fipsHost } from './fips/host';
+import type { InvoicePaymentBackend } from './invoice-payment-session';
+import { cvmCheckout } from './cvm-payment-dialog';
+import { LlmSession, type LlmService } from './llm-contract';
 import type { ThemeSource } from './appearance';
 import { blossomBytes, downloadBytes, readBytes } from '../../client/src/bytes';
 import { resourceMime } from '../../client/src/resource-mime';
@@ -43,6 +49,12 @@ export type HostPrompt = {
 export type HostOptions = {
   /** Trusted shell catalog/lifecycle broker; the frame cannot supply these values. */
   intent?: { workspace: IntentWorkspace; catalogId: string };
+  llm?: LlmService;
+  /** Trusted shell-owned tool inspector; omitted on untrusted review/capture surfaces. */
+  agentTools?: (session: NappletTools | null) => void;
+  cvmPayments?: InvoicePaymentBackend;
+  /** Disable even external-wallet checkout in untrusted review previews. */
+  disableCvmPayments?: boolean;
   frame: HTMLIFrameElement;
   identity: string;
   manifestId: string;
@@ -55,6 +67,8 @@ export type HostOptions = {
   sign?: HostSign;
   title?: string;
   localServers?: string[];
+  /** Explicit loopback seed origins for isolated local tests; never frame supplied. */
+  localFipsSeeds?: string[];
   pubkey: string | null;
   prompt: (prompt: HostPrompt | null) => void;
   files: (files: ExportFile[]) => void;
@@ -64,11 +78,20 @@ export type HostOptions = {
   backend?: BackendProvider;
   /** Trusted local preview's configured napplet scope; never supplied by the frame. */
   backendIdentity?: string;
+  /** Trusted shell entry, delivered once to this instance, never persisted or replayed on account changes. */
+  roomEntry?: import('../../multiplayer/src/directory').RoomEntry;
   backendAliases?: BackendProvider[];
   theme?: ThemeSource;
   /** Narrow shell shortcut; only invoked for a focused, interactive frame. */
   escape?: () => void;
+  /**
+   * Called once after NIP-5D replacement evidence revoked this session. The host
+   * has already closed the port and every grant; the caller must remove the iframe.
+   */
+  revoked?: (reason: NappletRevocation) => void;
 };
+export { NAPPLET_HELLO, revocationMessage, type NappletRevocation } from './revocation';
+import { NAPPLET_HELLO, type NappletRevocation } from './revocation';
 const envelope = z
   .object({
     type: z
@@ -79,29 +102,39 @@ const envelope = z
   })
   .passthrough();
 
-/** A single frame session. Caller supplies verified identity; messages cannot change it. */
+/**
+ * A single verified-document session. Caller supplies verified identity; messages
+ * cannot change it. Per NIP-5D Transport/Identity, the identity is bound to the
+ * MessagePort carried by the document's first `napplet.hello`, never to the
+ * reusable iframe Window, and every NAP message travels only over that port.
+ */
 export function attachNappletHost(options: HostOptions) {
   const source = options.frame.contentWindow;
   const dataPolicy = appDataPolicy(options.identity, options.actionRelays ?? options.relays);
   let alive = true,
-    initialized = false,
+    environmentSent = false,
     calls = 0,
-    windowStart = Date.now();
+    windowStart = Date.now(),
+    port: MessagePort | undefined,
+    loads = 0;
   // Frame budgets and concurrency survive account changes.
   const resourceQueue = new WorkQueue(4, 16);
   let resourceCalls = 0,
     resourceBytes = 0;
-  const send = (message: Record<string, unknown>) => {
-    if (alive) source?.postMessage(message, '*');
+  // Shells MUST NOT send NAP messages via iframeWindow.postMessage. Before the
+  // handoff there is no channel, so nothing can be delivered.
+  const send = (message: Record<string, unknown>, transfers: Transferable[] = []) => {
+    if (alive) port?.postMessage(message, transfers);
   };
   const intentEndpoint = options.intent?.workspace.attach(options.intent.catalogId, send);
-  // The iframe/handshake outlive account scopes. Each request captures its scope;
+  // The verified frame outlives account scopes. Each request captures its scope;
   // retiring it settles promises and prevents delayed results reaching a new user.
+  let firstEntry = options.roomEntry;
   const createAccount = (pubkey: string | null) => {
     let active = true;
     const requests = new Set<(error: Error) => void>();
-    const sendScoped = (message: Record<string, unknown>) => {
-      if (active) send(message);
+    const sendScoped = (message: Record<string, unknown>, transfers?: Transferable[]) => {
+      if (active) send(message, transfers);
     };
     let answer: ((accepted: boolean) => void) | undefined;
     let promptKind: HostPrompt['kind'] | undefined;
@@ -115,6 +148,10 @@ export function attachNappletHost(options: HostOptions) {
       undefined,
       options.outboxPolicy,
     );
+    const tools = options.agentTools
+      ? new NappletTools(options.title ?? 'Napplet', options.identity, sendScoped)
+      : undefined;
+    if (tools) options.agentTools?.(tools);
     const files = new NappletFiles(sendScoped, (value) => {
       if (active && alive) options.files(value);
     });
@@ -123,6 +160,15 @@ export function attachNappletHost(options: HostOptions) {
       `${options.identity}:${pubkey ?? 'guest'}`,
       crypto.randomUUID(),
     );
+    if (firstEntry) {
+      store({
+        type: 'storage.set',
+        scope: 'instance',
+        key: 'soy.room-entry.v1',
+        value: JSON.stringify(firstEntry),
+      });
+      firstEntry = undefined;
+    }
     const choose = (
       kind: HostPrompt['kind'],
       value: string,
@@ -139,10 +185,14 @@ export function attachNappletHost(options: HostOptions) {
           resolve(false);
           return;
         }
+        const activity = shellActivity(
+          'This napplet needs your approval. Review the shell dialog.',
+        );
         const timer = setTimeout(() => complete(false), 25000);
         const complete = (accepted: boolean, explicit = false) => {
           if (answer !== complete) return;
           clearTimeout(timer);
+          activity.dismiss();
           actions.signal?.removeEventListener('abort', abort);
           answer = undefined;
           promptKind = undefined;
@@ -172,6 +222,13 @@ export function attachNappletHost(options: HostOptions) {
           dismiss: () => complete(false),
         });
       });
+    const fips = fipsHost({
+      send: sendScoped,
+      approve: (value, signal) => choose('network', value, { signal }),
+      localSeeds: options.localFipsSeeds,
+      title: options.title,
+      address: `event:${options.manifestId}`,
+    });
     const consent = (kind: 'action' | 'upload', value: string, signal: AbortSignal) =>
       choose(kind, `${options.title ?? 'This napplet'} requests:\n${value}`, { signal });
     const actions = new NappletActions({
@@ -194,6 +251,7 @@ export function attachNappletHost(options: HostOptions) {
       plan: publicationPlan,
       consent: (value, signal) => consent('action', `${options.identity}\n${value}`, signal),
       onPublished: (event) => {
+        shellActivity('Publishing').success('Your approved event was published.');
         nostr.events.ingest(event);
       },
     });
@@ -313,6 +371,12 @@ export function attachNappletHost(options: HostOptions) {
         return { blob, mime: blob.type };
       });
     };
+    const llm = new LlmSession(
+      options.llm,
+      lifetime.signal,
+      (text, signal) => choose('network', text, { signal }),
+      sendScoped,
+    );
     const handle = async (message: Record<string, unknown>) => {
       const type = String(message.type),
         [domain, action] = type.split('.');
@@ -332,6 +396,9 @@ export function attachNappletHost(options: HostOptions) {
             signal: lifetime.signal,
             consent: (label) => choose('network', label),
           },
+          options.disableCvmPayments
+            ? undefined
+            : cvmCheckout(signerScope, options.title ?? 'This napplet', options.cvmPayments),
         );
         if (domain === 'cvm') return backend.handle(message);
         webrtc ??= new NappletWebrtc(
@@ -365,6 +432,7 @@ export function attachNappletHost(options: HostOptions) {
         );
         return webrtc.handle(message);
       }
+      if (domain === 'llm') return llm.handle(message);
       if (domain === 'storage') return store(message);
       if (domain === 'fs')
         return files.handle(message, (name) => choose('save', name), chooseFiles, lifetime.signal);
@@ -453,7 +521,9 @@ export function attachNappletHost(options: HostOptions) {
       pubkey,
       requests,
       handle,
+      fips,
       media,
+      tools,
       diagnostics: () => webrtc?.diagnostics() ?? Promise.resolve([]),
       send: sendScoped,
       cancel: (id: string) => resources.get(id)?.abort(),
@@ -472,6 +542,8 @@ export function attachNappletHost(options: HostOptions) {
         for (const fail of requests) fail(new Error(reason));
         requests.clear();
         answer?.(false);
+        fips.close(reason !== 'Identity changed');
+        tools?.close();
         media.close();
         backend?.close();
         webrtc?.close();
@@ -515,17 +587,24 @@ export function attachNappletHost(options: HostOptions) {
     configWindow = Date.now();
   let mediaCalls = 0,
     mediaWindow = Date.now();
+  let mediaReports = 0,
+    mediaReportWindow = Date.now();
   let rtcCalls = 0,
     rtcBytes = 0,
     rtcWindow = Date.now();
-  const listener = (event: MessageEvent) => {
-    if (!alive || event.source !== source || event.origin !== 'null') return;
-    const parsed = envelope.safeParse(event.data);
+  // Sender authority comes only from the bound port; see windowListener.
+  const handle = (data: unknown) => {
+    if (!alive) return;
+    const parsed = envelope.safeParse(data);
     if (!parsed.success) return;
     const message = parsed.data;
+    if (message.type === 'resource.fips') {
+      account.fips.handle(message);
+      return;
+    }
     if (message.type === 'shell.ready') {
-      if (initialized) return;
-      initialized = true;
+      if (environmentSent) return;
+      environmentSent = true;
       send({
         type: 'shell.init',
         capabilities: {
@@ -539,31 +618,42 @@ export function attachNappletHost(options: HostOptions) {
       keys.ready();
       return;
     }
-    if (initialized && message.type.startsWith('keys.') && HOST_REQUESTS.has(message.type)) {
+    if (message.type.startsWith('keys.') && HOST_REQUESTS.has(message.type)) {
       keys.handle(message);
       return;
     }
     if (
-      initialized &&
       [
         'media.session.create',
         'media.session.update',
         'media.session.destroy',
         'media.command',
+        'media.state',
+        'media.capabilities',
       ].includes(message.type)
     ) {
-      if (Date.now() - mediaWindow >= 60000) {
-        mediaWindow = Date.now();
-        mediaCalls = 0;
-      }
-      if (++mediaCalls > 360) {
-        if (message.type === 'media.session.create' && message.id)
-          send({
-            type: 'media.session.create.result',
-            id: message.id,
-            error: 'session limit exceeded',
-          });
-        return;
+      // Playback reports cannot consume the command/lifecycle budget and prevent
+      // pause, destruction or creation of a replacement session.
+      if (message.type === 'media.state') {
+        if (Date.now() - mediaReportWindow >= 1000) {
+          mediaReportWindow = Date.now();
+          mediaReports = 0;
+        }
+        if (++mediaReports > 120) return;
+      } else {
+        if (Date.now() - mediaWindow >= 60000) {
+          mediaWindow = Date.now();
+          mediaCalls = 0;
+        }
+        if (++mediaCalls > 360) {
+          if (message.type === 'media.session.create' && message.id)
+            send({
+              type: 'media.session.create.result',
+              id: message.id,
+              error: 'session limit exceeded',
+            });
+          return;
+        }
       }
       try {
         if (JSON.stringify(message).length <= 16384) account.media.handle(message);
@@ -572,11 +662,11 @@ export function attachNappletHost(options: HostOptions) {
       }
       return;
     }
-    if (initialized && message.type.startsWith('gamepad.') && HOST_REQUESTS.has(message.type)) {
+    if (message.type.startsWith('gamepad.') && HOST_REQUESTS.has(message.type)) {
       gamepad.handle(message);
       return;
     }
-    if (initialized && message.type.startsWith('config.') && HOST_REQUESTS.has(message.type)) {
+    if (message.type.startsWith('config.') && HOST_REQUESTS.has(message.type)) {
       if (Date.now() - configWindow >= 60000) {
         configWindow = Date.now();
         configCalls = 0;
@@ -589,7 +679,20 @@ export function attachNappletHost(options: HostOptions) {
       }
       return;
     }
-    if (!initialized || !message.id || !HOST_REQUESTS.has(message.type)) return;
+    if (message.type.startsWith('webmcp.')) {
+      if (account.tools) account.tools.handle(message);
+      else if (message.id)
+        send({
+          type: `${message.type}.result`,
+          profile: 'soy.webmcp/1',
+          id: message.id,
+          error: { code: 'unsupported', message: 'Agent tools are unavailable in this surface.' },
+        });
+      return;
+    }
+    // Sender authority was bound before the iframe could execute. SHELL is an
+    // optional environment exchange, not an authorization or readiness gate.
+    if (!message.id || !HOST_REQUESTS.has(message.type)) return;
     const scope = account;
     // NAP-IDENTITY requires this basic snapshot to succeed without an error
     // field, even when asynchronous services have exhausted their quota.
@@ -623,6 +726,44 @@ export function attachNappletHost(options: HostOptions) {
             subId: message.subId,
             reason: detail,
           });
+        return;
+      }
+      if (message.type.startsWith('llm.')) {
+        const codes = [
+          'unsupported',
+          'invalid-request',
+          'selection-expired',
+          'user-cancelled',
+          'provider-error',
+          'cancelled',
+          'quota-exceeded',
+          'timeout',
+        ];
+        const prefix = detail.split(':')[0];
+        const code =
+          error instanceof z.ZodError
+            ? error.issues.some((issue) => issue.code === 'too_big')
+              ? 'quota-exceeded'
+              : 'invalid-request'
+            : error instanceof Error &&
+                (error.name === 'AbortError' ||
+                  ['Identity changed', 'Player closed'].includes(error.message))
+              ? 'cancelled'
+              : codes.includes(prefix)
+                ? prefix
+                : 'provider-error';
+        scope.send({
+          type: `${message.type}.result`,
+          id: message.id,
+          error: {
+            code,
+            message: codes.includes(prefix)
+              ? detail
+              : code === 'cancelled'
+                ? 'Inference cancelled.'
+                : 'The inference request failed.',
+          },
+        });
         return;
       }
       if (message.type.startsWith('intent.')) {
@@ -677,8 +818,12 @@ export function attachNappletHost(options: HostOptions) {
       if (intent) failure(error);
       return;
     }
-    if (!intent && size > 360000) return;
-    const realtime = message.type === 'webrtc.send';
+    if (!intent && size > (message.type === 'llm.generate' ? 8000000 : 360000)) {
+      if (message.type === 'llm.generate')
+        failure(new Error('quota-exceeded: Request exceeds the host input size limit.'));
+      return;
+    }
+    const realtime = message.type === 'webrtc.send' || message.type === 'webrtc.sendBytes';
     if (Date.now() - rtcWindow >= 1000) {
       rtcWindow = Date.now();
       rtcCalls = 0;
@@ -688,7 +833,13 @@ export function attachNappletHost(options: HostOptions) {
       (realtime ? ++rtcCalls > 120 || (rtcBytes += size) > 524288 : ++calls > 600) ||
       scope.requests.size >= 32
     ) {
-      failure(new Error('Request quota exceeded'));
+      failure(
+        new Error(
+          message.type.startsWith('llm.')
+            ? 'quota-exceeded: Too many requests.'
+            : 'Request quota exceeded',
+        ),
+      );
       return;
     }
     scope.requests.add(failure);
@@ -703,9 +854,70 @@ export function attachNappletHost(options: HostOptions) {
       .finally(() => scope.requests.delete(failure));
   };
   const unsubscribeTheme = options.theme?.subscribe(() => {
-    if (initialized) send({ type: 'theme.changed', theme: options.theme!.get() });
+    send({ type: 'theme.changed', theme: options.theme!.get() });
   });
-  window.addEventListener('message', listener);
+  // The injected bootstrap runs before any napplet script and sends exactly one
+  // window-level message: the hello carrying its private port. Any other
+  // window-level traffic from this frame, a second hello, a second load or a
+  // failed port means the verified document is gone or never owned the frame.
+  const windowListener = (event: MessageEvent) => {
+    if (!alive || !source || event.source !== source) return;
+    const data = event.data as { type?: unknown } | null;
+    if (
+      port ||
+      event.origin !== 'null' ||
+      typeof data !== 'object' ||
+      data === null ||
+      data.type !== NAPPLET_HELLO ||
+      event.ports.length !== 1
+    ) {
+      revoke(
+        data?.type === NAPPLET_HELLO
+          ? port
+            ? 'second-hello'
+            : 'invalid-hello'
+          : port
+            ? 'window-message'
+            : 'invalid-hello',
+      );
+      return;
+    }
+    port = event.ports[0];
+    port.onmessage = (message) => handle(message.data);
+    port.onmessageerror = () => revoke('port-closed');
+    // Browsers that implement MessagePort close events report the document's end.
+    port.addEventListener('close', () => revoke('port-closed'));
+  };
+  const loadListener = () => {
+    if (++loads > 1) revoke('second-load');
+  };
+  const revoke = (reason: NappletRevocation) => {
+    if (!alive) return;
+    // close() is the load-bearing step: removing the iframe kills nothing that
+    // was transferred out of the document.
+    teardown();
+    options.revoked?.(reason);
+  };
+  const teardown = () => {
+    alive = false;
+    port?.close();
+    port = undefined;
+    intentEndpoint?.close();
+    unsubscribePermission();
+    unsubscribeTheme?.();
+    window.removeEventListener('message', windowListener);
+    options.frame.removeEventListener?.('load', loadListener);
+    account.close('Player closed');
+    gamepad.close();
+    config.close();
+    keys.close();
+    options.agentTools?.(null);
+    options.configuration?.(null);
+    options.media?.(null);
+    options.files([]);
+  };
+  window.addEventListener('message', windowListener);
+  options.frame.addEventListener?.('load', loadListener);
   return {
     diagnostics: () => (alive ? account.diagnostics() : Promise.resolve([])),
     updateIdentity(pubkey: string | null) {
@@ -713,23 +925,11 @@ export function attachNappletHost(options: HostOptions) {
       account.close('Identity changed');
       options.files([]);
       account = createAccount(pubkey);
-      if (initialized) send({ type: 'identity.changed', pubkey: pubkey ?? '' });
+      send({ type: 'identity.changed', pubkey: pubkey ?? '' });
       config.updateIdentity(pubkey);
     },
     close() {
-      if (!alive) return;
-      alive = false;
-      intentEndpoint?.close();
-      unsubscribePermission();
-      unsubscribeTheme?.();
-      window.removeEventListener('message', listener);
-      account.close('Player closed');
-      gamepad.close();
-      config.close();
-      keys.close();
-      options.configuration?.(null);
-      options.media?.(null);
-      options.files([]);
+      if (alive) teardown();
     },
   };
 }

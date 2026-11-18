@@ -5,6 +5,7 @@ import skills from '../vendor/skills.json';
 import settingsSchema from '../templates/config.schema.json';
 import settingsExample from '../templates/napplet-settings.ts.txt' with { type: 'text' };
 import actionsGuide from '../../../docs/RUNTIME-ACTIONS.md' with { type: 'text' };
+import webmcpGuide from '../../../docs/WEBMCP.md' with { type: 'text' };
 import controllersGuide from '../../../docs/CONTROLLERS.md' with { type: 'text' };
 import mobileGuide from '../../../docs/MOBILE.md' with { type: 'text' };
 import wasmGuide from '../../../docs/WASM.md' with { type: 'text' };
@@ -26,7 +27,10 @@ import minicraftHandler from '../../../packages/dynamic-backends/fixtures/minicr
 import minicraftManifest from '../../../packages/dynamic-backends/fixtures/minicraft/backend.json';
 import minicraftSchemas from '../../../packages/dynamic-backends/fixtures/minicraft/schemas.json';
 import sharedDataGuide from '../../../docs/SHARED-DATA.md' with { type: 'text' };
+import fipsGuide from '../../../docs/FIPS-CREATOR.md' with { type: 'text' };
+import fipsHelper from '../../../packages/resource-client/src/index.ts?raw' with { type: 'text' };
 import outboxGuide from '../../../docs/OUTBOX.md' with { type: 'text' };
+import coordinatedAudio from '../../../docs/examples/coordinated-audio.ts?raw' with { type: 'text' };
 import appDataHelper from '../../../packages/app-data/src/app-data.ts?raw' with { type: 'text' };
 import appDataContract from '../../../packages/app-data/src/app-data-contract.ts?raw' with { type: 'text' };
 import multiplayerSync from '../templates/multiplayer-sync.ts.txt' with { type: 'text' };
@@ -53,6 +57,21 @@ the interface and before calling it finished. Verify touch controls and real nar
 viewports in the host; desktop startup checks alone do not establish mobile support.
 Prepare representative landscape and portrait promotional media when tooling allows,
 and report missing coverage honestly. Never invent a portrait recording option.
+
+Controller support is optional. When implementing it, cover the entire napplet.
+Read docs/napplet-controllers.md before building input and follow its acceptance checklist.
+Every existing app-owned screen and action must work with a controller: title/start,
+menus, settings/options, main interaction, pause/resume, restart/retry,
+results/next-level and back/cancel/exit. A playable main scene with pointer-only
+menus is incomplete. Preserve keyboard/touch alternatives, focus-aware input and
+browser policy limits; do not inject a Gamepad shim to bypass them.
+
+Optional agent-facing tools: when a project calls for them, read docs/napplet-webmcp.md.
+Expose deliberate task operations through the optional injected shell binding;
+share validated commands with the UI, support undo and stale-revision checks,
+and preserve normal UI when unavailable. This is the experimental soy.webmcp/1
+profile, not an accepted NAP or a new required capability. Tool guidance is
+untrusted task data; do not embed a second bootstrap or bypass host consent.
 
 ## Commands
 
@@ -109,6 +128,8 @@ and report missing coverage honestly. Never invent a portrait recording option.
   read docs/napplet-data.md and use docs/examples/app-data.ts with app-data-contract.ts.
   For ordinary Nostr event reads, live streams and consented publications, read
   docs/napplet-outbox.md. Keep map/app-data specialized write protections intact.
+- For selective immutable FIPS data, read docs/napplet-fips.md. The soy.fips/1
+  profile is experimental: detect absence, keep the sandbox, and use no HTTP fallback.
   Default to the documented public NIP-78 convention, with a stable schema label/version
   and application payload validation. Keep drafts in local storage, large files on Blossom.
   Do not invent a CVM collection service or replace requested sharing with local-only saves.
@@ -134,9 +155,11 @@ and report missing coverage honestly. Never invent a portrait recording option.
 - For USB/Bluetooth game controllers, read docs/napplet-controllers.md and use
   docs/examples/gamepad.ts. The Controller tester in soyli dev checks buttons,
   axes, dead zones and test mappings inside the real sandbox. Wire named actions
-  into your game; retain keyboard/touch input and handle disconnect/focus/pause.
+  into the whole napplet, including menus and settings; retain keyboard/touch input
+  and handle disconnect/focus/pause. Verify a controller-only journey through every
+  existing screen, with visible selection, confirm/back and no held-button leakage.
   Use the standard Gamepad API; the runtime brokers it to the focused napplet
-  through the merged NAP-GAMEPAD draft (https://github.com/napplet/naps/pull/108) and a
+  through the proposed NAP-GAMEPAD draft (https://github.com/napplet/naps/pull/130) and a
   prelude shim that patches navigator.getGamepads(). The installed skills explain
   the shim, focus rules and limits. Do not add SERIAL or a gamepad requires entry.
   Test actual controllers as well as synthetic input; soyli check is not a hardware test.
@@ -151,7 +174,8 @@ and report missing coverage honestly. Never invent a portrait recording option.
   For an interaction recipe set preview.recording.actions: timed click (x/y in a
   960 × 600 viewport), keyDown or keyUp with atMs relative to recording start.
   preview.recording.durationMs is 2000–8000; startMs is 0–10000 after normal startup.
-  A changed build needs a fresh clip, or remove preview.video to publish only a PNG.
+  A changed build needs a fresh clip or explicit media review in Studio's Publish
+  update flow; remove preview.video to publish only a PNG.
 - soyli publish --dry-run inspects source and destinations;
   soyli publish requires a committed clean tree, builds dist/index.html projects,
   then checks the artifact and publishes. Preview/review opening never runs build scripts.
@@ -251,9 +275,11 @@ saved release destinations. Keep the publication journal to preserve that histor
 Publishing automatically captures a 1200 × 750 PNG from the sandbox when no
 preview.image is selected, using preview.delayMs (1500 by default, 250–10000).
 It uploads the PNG to the selected Blossom server and signs its hash/MIME in the
-napplet manifest. The optional soy.presentation/1 convention uses presentation,
-screenshot and preview tags; these are not established NIP-5D fields. Clients that
-ignore them can still play the same napplet. No new Zapstore event is generated.
+napplet manifest. Fresh publications use the selected NIP-5D proposal's screenshot
+and preview key/value fields: x is the media hash, m the optional MIME, with size
+and video dimensions/duration when known. No presentation marker is required.
+Older soy.presentation/1 events remain readable; clients ignoring optional media
+can still play the same napplet. No new Zapstore event is generated.
 This fallback prevents accidental
 imageless releases; an inspected screenshot is still the preferred finishing step.
 For an interactive scene needing a start click, take a representative PNG during
@@ -264,6 +290,10 @@ soyli record produces 960 × 600 video; the recorder may add a brief final frame
 Publishing freezes its bytes and a signed preview hash/MIME on the napplet manifest,
 retaining a screenshot for clients that do not display video. Never fabricate a clip
 or change preview.video.artifactHash to bypass the stale-build check.
+Studio can retain a previous release's cover and clip after explicit review. It
+keeps the original artifactHash and records reviewedFor with the exact new build
+and clip hashes. Do not invent this approval; the user reviews the retained media
+before signing. Changing the build or clip invalidates it. Re-recording replaces it.
 The local preview setting is authoring configuration, not a new Nostr manifest tag.
 
 Readable routes are a one-time website claim, not an automatic publish step.
@@ -319,8 +349,13 @@ One remix supports both paths, in either order:
 - soyli proposals --json gives agent-readable proposals and exact revisions.
 - soyli merge <id> --revision <event-id> --target <reviewed-HEAD> merges locally.
   Merge on the upstream target branch. soyli push publishes that branch and
-  confirmed applied status, preserving other refs; soyli publish releases the
-  napplet separately. A failed push keeps its journal; rerun it from the same tip.
+  confirmed applied status, preserving other refs. soyli publish also marks
+  included proposals merged after hosted Git delivery, so a release needs no
+  separate push. Linked Git remains read-only: merged statuses require the
+  reviewed branch's signed and served tips to equal the release commit. Resume
+  rechecks that saved branch; retaining the commit under a tag is not enough.
+  Source URL relay hints are preserved. Retry a failed release with publish
+  --resume; retry a failed push from the same tip.
 Use the same selected revision for testing and merge. A changed target or proposal
 requires another review. Ordinary Git/ngit remain available for branches, patches,
 conflicts and maintainer layouts outside this simple creator workflow.
@@ -412,11 +447,37 @@ the napplet or weaken checks to make the report green. Keep the conformance resu
 soyli check result and real interaction evidence separate. The pinned suite can
 skip manifest, wire and lifecycle cases; that is unmeasured coverage.
 
+soyli check reports startup separately from interaction. It replays configured
+preview.recording inputs even when not recording a video; without inputs, interaction
+is explicitly not measured. Inspect coverage and warnings in its result. Inputs
+executed without errors do not prove gameplay correctness, coordinated sound or
+compatibility with another shell. Test core behavior and optional-domain denial,
+including missing MEDIA and unsupported owner modes. Test the same final artifact
+in an independent shell such as Paja; record its version and actual failures or
+unavailable checks. Do not replace the artifact, inject Soy helpers or wrap a current
+manifest in a legacy event and call that current-manifest interoperability.
+
 For optional capabilities, wrap the SDK call itself in try/await/catch; attaching
 .catch to its result alone misses synchronous exceptions. If an optional save fails,
 keep the app usable and explain that progress was not saved. Do not silently treat
 failed required capabilities as success. Include your game/interaction regression
 tests in your normal verification command, not only in a one-off test run.
+
+## Experimental shell inference
+
+An experimental reference host may offer the optional llm domain. This is a draft,
+not an accepted NAP. Use it only when the project owner opts
+into the draft. Check for the injected domain, select a model in the shell, keep
+provider credentials outside the napplet and never add direct network access.
+Send only the intended conversation, inline images and tool definitions/results.
+Generation.content contains text, thinking and toolCall parts. For ordinary text
+require finish === 'stop'; for JSON concatenate text parts and validate your schema.
+Only execute an application-owned tool after authoritative finish === 'toolUse',
+checking its name and arguments. Answer every parallel call with one toolResult;
+never execute provisional deltas. Thinking is display-only and cannot authorize
+action. Discover tools/toolChoiceModes instead of assuming forced calls work. A timeout/cancellation
+may still incur provider charges; do not retry automatically. Missing llm must
+leave the rest of the app usable. See docs/LLM.md in the soyLI source repository.
 
 ## Runtime capabilities
 
@@ -462,7 +523,7 @@ around a lookup failure or bypass the iframe's network restrictions.
 Check injected domain availability before implementing a capability-dependent feature:
 an SDK export or passing upstream reference-shell test does not mean soyLI or the
 deployed website implements that domain. Local and deployed versions may differ.
-soyLI 0.8.0 adds NAP-MEDIA shell-owned audio/stream playback. The website needs the
+The shared runtime supports NAP-MEDIA shell-owned and napplet-owned audio. The website needs the
 matching deployment; upgrading one does not upgrade the other. Use the upstream SDK
 media.createSession with owner: 'shell', source.url (public HTTPS), optional audio
 metadata, live: true for radio, and autoplay: false when showing your own play button.
@@ -470,13 +531,36 @@ Wait for the result's canonical sessionId, subscribe with onState/onCapabilities
 then sendCommand for play/pause/stop/volume. Destroy sessions when leaving the view.
 MP3, Ogg audio and WAV are supported subject to browser codecs. The host handles
 streaming, source checks and gesture prompts. Only use advertised controls; no seek,
-playlists/HLS/DASH, video, napplet-owned sessions or hash/Nostr-only source resolution
+playlists/HLS/DASH, video or hash/Nostr-only source resolution
 is implemented. Nostr hints and session context are metadata, not network authority.
 Artwork is not loaded by this audio host. Four sessions per frame are allowed; one
-plays at a time. Streams stop at 128 MiB or two hours and close with the napplet.
-Small embedded data/blob audio and Web Audio are separate browser features, subject
-to user activation and codec support. Do not work around missing media support by
+plays at a time under cooperative session control. Host streams close with the napplet.
+
+Embedded data/blob audio and synthesized Web Audio must also coordinate through
+NAP-MEDIA: createSession({ owner: 'napplet', capabilities: ['play', 'pause', 'stop',
+'volume'], metadata: { title: 'Game sound', mediaType: 'audio' } }). Advertise only
+controls you implement. Wait for the canonical sessionId, attach
+onCommand(sessionId, (action, value) => { /* operate local audio */ }), and
+reportState with the actual status and volume. Implement commands against your
+local audio graph/element; do not sendCommand to your own napplet-owned session.
+Report state on changes, and reportCapabilities when supported controls change.
+Pause/stop must silence all output, including effects; volume must affect all output.
+Keep one session for the game's audio graph, not one per sound effect. Release the
+graph, listeners and session on teardown. Suspend audio on identity change and
+recreate the session if the current account scope has retired it.
+
+AudioContext resume/local playback still needs a user gesture. A host play request
+does not guarantee browser activation inside the frame; retain an in-app sound
+button and report the actual paused state when activation is refused. Handle missing
+media and createSession rejection: a game should remain playable silently; a media
+app should explain the unsupported mode. Do not continue unregistered sound as a
+fallback. A source field on a napplet-owned session is advisory, not permission for
+remote URLs. Test two napplets playing in turn and host pause/stop/volume controls.
+Do not work around missing media support by
 adding direct remote URLs, fetch, an unbounded resource download or a looser CSP.
+Use docs/examples/coordinated-audio.ts for optional Web Audio: pass the SDK media
+wrapper after checking the injected domain, route every output through its gain,
+and dispose it on teardown. Ordinary input must not override a host pause.
 For clients without media, keep a clear unavailable state or user-confirmed link
 fallback; if playback is the core purpose, declare media required and report the
 host gap. Test the actual play/pause/volume flow, not only build/startup or relay lookup.
@@ -528,7 +612,7 @@ docs and skills replace uniform density/whole-surface host-matching mandates wit
 project-specific visual direction for content and UI. Generated manifest guidance
 is adapted to the selected standalone NIP-5D draft; vendor snapshots stay intact.
 Game-facing skills gain controller guidance for the NAP-GAMEPAD draft
-(napplet/naps#108, merged at 19de5ce1) and this host's getGamepads() shim.
+(napplet/naps#130, draft revision 0b28f77e) and this host's getGamepads() shim.
 NAP message APIs and the pinned build plugin are unchanged.
 Installed skill folders are excluded from the boilerplate's repository-guidance
 scan; the schema-free-starter assertion checks our static settings example instead.
@@ -538,7 +622,7 @@ files are reported as conflicts and preserved. Template/source changes are never
 applied by that command.
 `;
 
-const pointer = `## napplet soyLI workspace\n\nRead [docs/napplet-space.md](docs/napplet-space.md) first for this project's CLI commands, installed skills, preview cleanup and host capabilities. Read [docs/napplet-visual-design.md](docs/napplet-visual-design.md) before styling the creation and its UI. This project and its adapted skills are already installed; do not re-scaffold or reinstall them. Use soyli dev and its printed URL for hosted preview, and stop your preview session after testing. Use the upstream guidance below with those tooling mappings.\n\n`;
+const pointer = `## napplet soyLI workspace\n\nRead [docs/napplet-space.md](docs/napplet-space.md) first for this project's CLI commands, installed skills, preview cleanup and host capabilities. Read [docs/napplet-visual-design.md](docs/napplet-visual-design.md) before styling the creation and its UI. When implementing controller support, read [docs/napplet-controllers.md](docs/napplet-controllers.md) and cover the entire napplet, including menus, settings, pause, restart and back navigation. This project and its adapted skills are already installed; do not re-scaffold or reinstall them. Use soyli dev and its printed URL for hosted preview, and stop your preview session after testing. Use the upstream guidance below with those tooling mappings.\n\n`;
 
 export function creatorSkills() {
   const files: Record<string, string> = {
@@ -554,10 +638,14 @@ export function creatorSkills() {
     'docs/examples/minicraft/schemas.json': JSON.stringify(minicraftSchemas, null, 2) + '\n',
     'docs/napplet-data.md': sharedDataGuide,
     'docs/examples/app-data.ts': appDataHelper,
+    'docs/examples/coordinated-audio.ts': coordinatedAudio,
     'docs/examples/app-data-contract.ts': appDataContract,
     'docs/napplet-outbox.md': outboxGuide,
+    'docs/napplet-fips.md': fipsGuide,
+    'docs/examples/fips-resource-client.ts': fipsHelper,
     'docs/napplet-actions.md': actionsGuide,
     'docs/napplet-controllers.md': controllersGuide,
+    'docs/napplet-webmcp.md': webmcpGuide,
     'docs/napplet-mobile.md': mobileGuide,
     'docs/napplet-wasm.md': wasmGuide,
     'docs/napplet-visual-design.md': visualGuide,

@@ -1,5 +1,5 @@
 /**
- * NAP-GAMEPAD (merged upstream draft, docs/NAP-GAMEPAD.md). The shell owns the only native
+ * NAP-GAMEPAD (proposed upstream draft, docs/NAP-GAMEPAD.md). The shell owns the only native
  * Gamepad reader; player frames are denied the browser API by Permissions-Policy and
  * receive snapshots only while their frame has input focus.
  */
@@ -63,7 +63,7 @@ function padState(pad: NativePad, index: number): PadState {
       .map((button) => ({
         value: clamp(button?.value, 0),
         pressed: !!button?.pressed,
-        touched: !!button?.touched,
+        touched: !!(button?.touched ?? button?.pressed),
       })),
   };
 }
@@ -186,7 +186,7 @@ export class NappletGamepad {
     this.broker = options.broker ?? (pageBroker ??= new GamepadBroker());
   }
   handle(message: { type: string }) {
-    if (!this.alive) return;
+    if (!this.alive || Object.keys(message).length !== 1) return;
     if (message.type === 'gamepad.unsubscribe') {
       this.stop();
       return;
@@ -200,7 +200,7 @@ export class NappletGamepad {
       if (this.subscriber) this.broker.remove(this.subscriber);
       this.subscriber = { frame: this.options.frame, send: this.options.send };
       this.broker.add(this.subscriber);
-    } else if (message.type === 'gamepad.unsubscribe') this.stop();
+    }
   }
   private stop() {
     if (this.subscriber) this.broker.remove(this.subscriber);
@@ -210,24 +210,4 @@ export class NappletGamepad {
     this.alive = false;
     this.stop();
   }
-}
-
-/** For frames without a full napplet host, such as the workshop controller tester. */
-export function attachGamepadBridge(frame: HTMLIFrameElement, broker?: GamepadBroker) {
-  const source = frame.contentWindow;
-  const session = new NappletGamepad({
-    frame,
-    send: (message) => source?.postMessage(message, '*'),
-    broker,
-  });
-  const listener = (event: MessageEvent) => {
-    if (event.source !== source || event.origin !== 'null') return;
-    const type = (event.data as { type?: unknown } | null)?.type;
-    if (type === 'gamepad.subscribe' || type === 'gamepad.unsubscribe') session.handle({ type });
-  };
-  window.addEventListener('message', listener);
-  return () => {
-    window.removeEventListener('message', listener);
-    session.close();
-  };
 }

@@ -1,3 +1,4 @@
+import { presentShellDialog } from '../../../../packages/runtime/src/shell-ui';
 import { useSyncExternalStore, useState, useRef, useEffect } from 'react';
 import { Player } from './player';
 import {
@@ -7,30 +8,18 @@ import {
   closeIntentLaunch,
   failIntentLaunch,
   dismissIntentError,
-  webIntentWorkspace,
 } from '@/lib/intent-workspace';
-import { intentDefaultControls } from '../../../../packages/runtime/src/intent-controls';
 
 /** Shell-owned handler choice and target surface; no payload is exposed to other catalog entries. */
 export function IntentLauncher() {
   const state = useSyncExternalStore(subscribeIntentUi, intentUi, serverIntentUi);
   const [remember, setRemember] = useState(false);
-  const choiceDialog = useRef<HTMLDialogElement>(null),
-    defaults = useRef<HTMLDivElement>(null);
+  const choiceDialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (state.choice && !choiceDialog.current?.open) choiceDialog.current?.showModal();
+    if (state.choice && choiceDialog.current) return presentShellDialog(choiceDialog.current);
   }, [state.choice]);
-  useEffect(() => {
-    const controls = intentDefaultControls(webIntentWorkspace());
-    defaults.current?.append(controls.element);
-    return () => {
-      controls.close();
-      controls.element.remove();
-    };
-  }, []);
   return (
     <>
-      <div ref={defaults} className="intent-handler-settings" />
       {state.choice && (
         <dialog
           ref={choiceDialog}

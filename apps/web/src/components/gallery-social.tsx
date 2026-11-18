@@ -1,13 +1,16 @@
-import { gallerySocial, publishSocial } from '@/lib/protocol-social';
+import { galleryEntries, gallerySocial, publishSocial } from '@/lib/protocol-social';
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { asapScheduler, subscribeOn, type Observable } from 'rxjs';
+import { use$ } from 'applesauce-react/hooks';
 import { Link } from '@tanstack/react-router';
 import { Heart, MessageCircle, Zap, ChevronLeft, ChevronRight, LockKeyhole } from 'lucide-react';
 import { Button } from './ui/button';
@@ -22,14 +25,20 @@ import {
   socialScope,
 } from '../../../../packages/protocol/src/social';
 import type { GallerySearch, SignedEvent } from '../../../../packages/protocol/src';
-import type { GallerySocialData } from '../../../../packages/backend/src/gallery-social';
+import type { GalleryZapData } from '../../../../packages/client/src/gallery-social';
+import { countTarget, likesMetric } from '../../../../packages/client/src/social-counts';
+import { socialCounts } from '@/lib/social-counts';
 import { publicLink, type PublicNapplet } from '../../../../packages/backend/src/public-model';
 import { protocolClient } from '@/lib/network';
 import { readLikeState } from '../../../../packages/client/src/social';
 import { useZapTotals, zapTotalsStore } from '@/lib/zap-totals';
+import { useCountRankings, type Rankings } from '@/lib/use-count-rankings';
+import { rankingNotice } from '@/lib/count-rankings';
+export { useCountRankings } from '@/lib/use-count-rankings';
 
 const Context = createContext<{
-  data: GallerySocialData | null;
+  data: GalleryZapData | null;
+  rankings: Rankings;
   error: string;
   busy: boolean;
   active: string;
@@ -52,13 +61,17 @@ export function GallerySocialProvider({
   const { pubkey } = useNostr();
   const key = useRef(pubkey);
   key.current = pubkey;
-  const [data, setData] = useState<GallerySocialData | null>(null);
+  const [data, setData] = useState<GalleryZapData | null>(null);
+  const [entries, setEntries] = useState<PublicNapplet[] | null>(null);
+  const rankings = useCountRankings(entries);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [active, setActive] = useState('');
   const [phase, setPhase] = useState('');
   const [cards, setCards] = useState<Record<string, number>>({});
+  const visible = useRef(cards);
+  visible.current = cards;
   const register = useCallback((id: string) => {
     setCards((v) => ({ ...v, [id]: (v[id] ?? 0) + 1 }));
     return () => setCards((v) => ({ ...v, [id]: Math.max(0, (v[id] ?? 1) - 1) }));
@@ -84,6 +97,16 @@ export function GallerySocialProvider({
     setData(null);
   }, [query]);
   useEffect(() => {
+    let current = true;
+    void galleryEntries(search).then(
+      (value) => current && setEntries(value),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [query, revision]);
+  useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
@@ -99,13 +122,15 @@ export function GallerySocialProvider({
             setData(value);
             setError('');
           },
+          // Cards on screen get their zap totals and like state first.
+          new Set(Object.keys(visible.current).filter((id) => visible.current[id] > 0)),
         );
         if (controller.signal.aborted) return;
         setData(value);
         setError('');
         delay = value.refreshing ? 5000 : 30000;
       } catch {
-        if (!controller.signal.aborted) setError('Social counts are temporarily unavailable.');
+        if (!controller.signal.aborted) setError('Zap totals are temporarily unavailable.');
       } finally {
         if (!controller.signal.aborted) timer = setTimeout(refresh, delay);
       }
@@ -158,6 +183,7 @@ export function GallerySocialProvider({
     <Context.Provider
       value={{
         data,
+        rankings,
         error,
         busy,
         active,
@@ -226,6 +252,7 @@ export function GalleryCardSocial({
   const social = useContext(Context),
     { pubkey, ready } = useNostr();
   const zaps = useZapTotals(socialScope(napplet.manifest).key);
+  const conversation = useNappletCounts(napplet);
   useEffect(() => social?.register(napplet.revisionId), [social?.register, napplet.revisionId]);
   if (!social)
     return (
@@ -233,7 +260,7 @@ export function GalleryCardSocial({
         {children}
       </div>
     );
-  const counts = { ...social.data?.counts[napplet.revisionId], ...zaps };
+  const counts = { ...conversation, ...social.data?.counts[napplet.revisionId], ...zaps };
   const feedback = social.message?.id === napplet.revisionId ? social.message.text : undefined;
   const ownsPending = social.pending?.napplet.revisionId === napplet.revisionId;
   return (
@@ -330,7 +357,10 @@ export function SocialRankings({
   return (
     <div className="social-discovery">
       <div className="social-discovery-note">
-        <p>From the conversation · recent activity found on this client’s relays.</p>
+        <p>
+          From the conversation · counts from this client’s NIP-45 relay; zaps are verified
+          receipts.
+        </p>
         {!pubkey && (
           <span>
             <LockKeyhole size={12} /> Sign in to like or comment. Anyone can zap.
@@ -346,8 +376,19 @@ export function SocialRankings({
         <SocialRail
           key={kind}
           kind={kind}
-          entries={social?.data?.rankings[kind] ?? []}
-          loading={(!social?.data && !social?.error) || !!social?.data?.refreshing}
+          entries={(kind === 'zapped' ? social?.data?.zapped : social?.rankings[kind]) ?? []}
+          loading={
+            kind === 'zapped'
+              ? (!social?.data && !social?.error) || !!social?.data?.refreshing
+              : (social?.rankings.status[kind] ?? 'loading') === 'loading'
+          }
+          notice={
+            kind === 'zapped'
+              ? ''
+              : social?.rankings.retryError ||
+                rankingNotice(social?.rankings.status[kind] ?? 'loading')
+          }
+          retry={kind === 'zapped' ? undefined : social?.rankings.retry}
           active={active}
           setActive={setActive}
         />
@@ -360,12 +401,16 @@ function SocialRail({
   kind,
   entries,
   loading,
+  notice,
+  retry,
   active,
   setActive,
 }: {
   kind: 'liked' | 'zapped' | 'commented';
   entries: PublicNapplet[];
   loading: boolean;
+  notice: string;
+  retry?: () => void;
   active: string | null;
   setActive: (id: string | null) => void;
 }) {
@@ -424,6 +469,11 @@ function SocialRail({
           </Button>
         </div>
       </div>
+      {notice && (
+        <p className="rail-empty" role="status">
+          {notice} <button onClick={retry}>Retry counts</button>
+        </p>
+      )}
       {entries.length ? (
         <div
           ref={rail}
@@ -447,13 +497,34 @@ function SocialRail({
             );
           })}
         </div>
-      ) : (
+      ) : !notice ? (
         <p className="rail-empty">
           {loading
             ? 'Finding the conversation…'
             : `No ${kind === 'zapped' ? 'verified zaps' : kind === 'liked' ? 'likes' : 'comments'} found for this collection yet.`}
         </p>
-      )}
+      ) : null}
     </section>
   );
+}
+
+const deferred = <T,>(source: Observable<T>) =>
+  // Defer past use$'s synchronous render probe so abandoned renders start no relay work.
+  source.pipe(subscribeOn(asapScheduler));
+
+/** Raw NIP-45 totals for one card; undefined stays distinct from a counted zero. */
+function useNappletCounts(napplet: PublicNapplet) {
+  const target = useMemo(() => countTarget(napplet.manifest), [napplet.manifest]);
+  const likes = use$(() => {
+    const counts = socialCounts();
+    return counts && deferred(counts.event(target).metric(likesMetric));
+  }, [target]);
+  const comments = use$(() => {
+    const counts = socialCounts();
+    return counts && deferred(counts.event(target).comments);
+  }, [target]);
+  return {
+    ...(likes?.value !== undefined ? { likeCount: likes.value } : {}),
+    ...(comments?.value !== undefined ? { commentCount: comments.value } : {}),
+  };
 }

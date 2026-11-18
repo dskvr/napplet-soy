@@ -1,3 +1,10 @@
+import { verifiedRoomEntry } from '@/lib/playing-now';
+import { fileDownloads } from '../../../../packages/runtime/src/file-downloads';
+import { presentShellDialog } from '../../../../packages/runtime/src/shell-ui';
+import { useWallet } from './wallet/wallet-provider';
+import { cvmWalletPayments } from '@/lib/cvm-wallet-payments';
+import { useStudio } from './studio-provider';
+import { inferenceService } from '../../../../packages/runtime/src/llm-service';
 import {
   installPlayerIntent,
   playerIntentCatalogId,
@@ -25,31 +32,35 @@ import {
 } from '../../../../packages/backend/src/public-model';
 import shim from '@napplet/shim/prelude.global?raw';
 import { nappletPrelude } from '../../../../packages/runtime/src/prelude';
-import { attachNappletHost, type HostPrompt } from '../../../../packages/runtime/src/host';
+import {
+  attachNappletHost,
+  revocationMessage,
+  type HostPrompt,
+} from '../../../../packages/runtime/src/host';
 import type { ExportFile } from '../../../../packages/runtime/src/filesystem';
 import { declaredConfig } from '../../../../packages/runtime/src/config-schema';
 import type { NappletConfig } from '../../../../packages/runtime/src/config-session';
+import { AgentToolsControl } from '../../../../packages/runtime/src/webmcp/control';
+import type { NappletTools } from '../../../../packages/runtime/src/webmcp/session';
 import { SettingsControl } from '../../../../packages/runtime/src/settings-panel';
 import { MediaControls } from '../../../../packages/runtime/src/media-controls';
 import type { NappletMedia } from '../../../../packages/runtime/src/media-session';
 
 function FileExports({ files }: { files: ExportFile[] }) {
-  const [downloads, setDownloads] = useState<{ name: string; url: string }[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+  const downloads = useRef<ReturnType<typeof fileDownloads> | null>(null);
   useEffect(() => {
-    const next = files.map((file) => ({ name: file.name, url: URL.createObjectURL(file.blob) }));
-    setDownloads(next);
-    return () => next.forEach((file) => URL.revokeObjectURL(file.url));
+    downloads.current = fileDownloads(ref.current!);
+    return () => {
+      downloads.current?.close();
+      downloads.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    downloads.current?.update(files);
   }, [files]);
-  if (!downloads.length) return null;
   return (
-    <div className="host-files">
-      <span>Session files · download before closing</span>
-      {downloads.map((file) => (
-        <a key={file.name} href={file.url} download={file.name.split('/').pop()}>
-          {file.name} ↓
-        </a>
-      ))}
-    </div>
+    <div ref={ref} className="host-files" aria-label="Session downloads" hidden={!files.length} />
   );
 }
 
@@ -59,6 +70,7 @@ export function Player({
   pinned = false,
   autoPlay = false,
   compact = false,
+  embedded = false,
   onStop,
   immersive = false,
   onEnter,
@@ -72,6 +84,8 @@ export function Player({
   pinned?: boolean;
   autoPlay?: boolean;
   compact?: boolean;
+  /** Fill the containing workspace and tuck controls into its corner. */
+  embedded?: boolean;
   onStop?: () => void;
   immersive?: boolean;
   onEnter?: () => void;
@@ -80,20 +94,30 @@ export function Player({
   returnLabel?: string;
   onLoadError?: (error: Error) => void;
 }) {
+  const wallet = useWallet();
+  const walletRef = useRef(wallet);
+  walletRef.current = wallet;
+  const studio = useStudio();
+  const studioRef = useRef(studio);
+  studioRef.current = studio;
   const external = 'provenance' in napplet;
   const manifest = external ? napplet.manifest : pinned ? napplet.snapshot : napplet.current;
   const releaseId = manifest.id;
   const { ready, pubkey } = useNostr();
   const [prompt, setPrompt] = useState<HostPrompt | null>(null);
   const [exports, setExports] = useState<ExportFile[]>([]);
+  const [agentTools, setAgentTools] = useState<NappletTools | null>(null);
   const [configuration, setConfiguration] = useState<NappletConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [media, setMedia] = useState<NappletMedia | null>(null);
   const declaration = useRef<ReturnType<typeof declaredConfig>>({});
   const host = useRef<ReturnType<typeof attachNappletHost> | undefined>(undefined);
   const currentPubkey = useRef(pubkey);
-  const focusPrompt = useCallback((node: HTMLDivElement | null) => {
-    node?.querySelector<HTMLButtonElement>('button')?.focus();
+  const focusPrompt = useCallback((node: HTMLDialogElement | null) => {
+    if (!node) return;
+    const dispose = presentShellDialog(node);
+    node.querySelector<HTMLButtonElement>('button')?.focus();
+    return dispose;
   }, []);
   useLayoutEffect(() => {
     currentPubkey.current = pubkey;
@@ -140,23 +164,11 @@ export function Player({
     if (!playing) return;
     const token = owner.current;
     playback.claim(token, 'napplet', () => stopCurrent.current());
-    const hide = () => {
-      if (document.hidden) stopCurrent.current();
-    };
-    document.addEventListener('visibilitychange', hide);
-    const observer = compact
-      ? new IntersectionObserver(([entry]) => {
-          if (!entry.isIntersecting && !wrapper.current?.matches(':fullscreen, .player-expanded'))
-            stopCurrent.current();
-        })
-      : null;
-    if (wrapper.current) observer?.observe(wrapper.current);
-    return () => {
-      playback.release(token);
-      observer?.disconnect();
-      document.removeEventListener('visibilitychange', hide);
-    };
-  }, [playing, compact]);
+    // Visibility is not session lifetime: switching tabs or scrolling away must
+    // preserve the iframe, transient storage and connections. Decorative clips
+    // own their separate visibility policy. Unmount/Stop still closes the host.
+    return () => playback.release(token);
+  }, [playing]);
   useEffect(() => {
     if (immersive) setPlaying(true);
   }, [immersive]);
@@ -170,12 +182,39 @@ export function Player({
       host.current = undefined;
       if (!node || !release) return;
       host.current = attachNappletHost({
+        disableCvmPayments: !!reviewScope,
+        cvmPayments: reviewScope
+          ? undefined
+          : cvmWalletPayments(
+              () => walletRef.current.runtime,
+              (fn) => walletRef.current.run(fn),
+            ),
+        llm: reviewScope
+          ? undefined
+          : inferenceService(
+              (path, body) => {
+                const client = studioRef.current.client;
+                if (!client)
+                  throw new Error('Connect your shell account and configure AI connections first.');
+                return client.api(path, body);
+              },
+              () => studioRef.current.openConnections(),
+              'Your shell inference service',
+              () => {
+                const client = studioRef.current.client;
+                if (!client) throw new Error('Shell account disconnected');
+                return (path, body) => client.api(path, body);
+              },
+            ),
         intent: reviewScope
           ? undefined
           : { workspace: webIntentWorkspace(), catalogId: playerIntentCatalogId(release.manifest) },
         escape: () => escapeCurrent.current(),
         theme: shellTheme,
         backend: reviewScope ? undefined : backendProvider(),
+        roomEntry: reviewScope
+          ? undefined
+          : verifiedRoomEntry(location.href, release.manifest, backendProvider()?.pubkey),
         frame: node,
         identity: reviewScope
           ? `proposal:${reviewScope}:${release.manifest.id}`
@@ -192,8 +231,16 @@ export function Player({
         prompt: setPrompt,
         files: setExports,
         declaration: declaration.current,
+        agentTools: reviewScope ? undefined : setAgentTools,
         configuration: setConfiguration,
         media: setMedia,
+        // NIP-5D replacement evidence: the host already revoked every grant. Remove
+        // the frame; "Try again" creates a fresh one from the verified bytes.
+        revoked: (reason) => {
+          host.current = undefined;
+          setDoc('');
+          setError(revocationMessage(reason, 'viewer'));
+        },
       });
     },
     [release, reviewScope, napplet.title],
@@ -247,7 +294,7 @@ export function Player({
         ref={wrapper}
         tabIndex={-1}
         aria-label={`${napplet.title} player`}
-        className={`player-wrap${compact ? ' player-compact' : ''}${expanded ? ' player-expanded' : ''}`}
+        className={`player-wrap${compact ? ' player-compact' : ''}${embedded ? ' player-embedded' : ''}${expanded ? ' player-expanded' : ''}`}
       >
         <div className="player-stage">
           {!playing ? (
@@ -296,8 +343,12 @@ export function Player({
             </div>
           )}
           {prompt && (
-            <div
+            <dialog
               className="host-prompt"
+              onCancel={(event) => {
+                event.preventDefault();
+                prompt.dismiss();
+              }}
               role="dialog"
               aria-modal="true"
               aria-label={
@@ -364,7 +415,10 @@ export function Player({
               </p>
               <FilePicker prompt={prompt} />
               {prompt.kind === 'save' && (
-                <p>The file will appear below the player for you to download.</p>
+                <p>
+                  A Download button will appear when the napplet writes the file. Download it before
+                  closing this session.
+                </p>
               )}
               <div>
                 <Button variant="outline" onClick={() => prompt.answer(false)}>
@@ -402,11 +456,13 @@ export function Player({
                   </Button>
                 )}
               </div>
-            </div>
+            </dialog>
           )}
         </div>
+        <FileExports files={exports} />
         <PlayerChrome
-          expanded={expanded}
+          expanded={expanded || embedded}
+          embedded={embedded && !expanded}
           blocked={prompt !== null || settingsOpen}
           title={napplet.title}
           description={napplet.description}
@@ -414,7 +470,6 @@ export function Player({
           returnLabel={returnLabel}
           onExit={leave}
         >
-          <FileExports files={exports} />
           {media && <MediaControls media={media} />}
           <div className="player-controls">
             <span>
@@ -464,6 +519,7 @@ export function Player({
                   <Expand size={17} />
                 </Button>
               )}
+              <AgentToolsControl session={agentTools} />
               {configuration && (
                 <SettingsControl
                   session={configuration}

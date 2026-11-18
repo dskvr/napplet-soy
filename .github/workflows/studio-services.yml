@@ -1,0 +1,160 @@
+name: Studio services
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/studio-services.yml'
+      - '.github/scripts/ubuntu-mirror.sh'
+      - 'apps/studio/**'
+      - 'apps/web/**'
+      - 'apps/cli/**'
+      - 'packages/**'
+      - 'services/**'
+      - 'scripts/grasp*'
+      - 'scripts/relay*'
+      - 'tests/services/publish-stack.ts'
+      - 'tests/services/studio-proposal.test.ts'
+      - 'tests/services/studio-browser-git.test.ts'
+      - 'tests/services/studio-shell.test.ts'
+      - 'tests/services/studio-preview.test.ts'
+      - 'tests/services/studio-original-preview.test.ts'
+      - 'tests/services/cvm-payments.test.ts'
+      - 'tests/services/cvm-checkout-browser.test.ts'
+      - 'tests/fixtures/cvm-checkout.ts'
+      - 'tests/services/optional-wallet.test.ts'
+      - 'tests/services/fixtures/optional-wallet/**'
+      - 'tests/services/wallet-*.test.ts'
+      - 'tests/fixtures/wallet-*.ts'
+      - 'tests/services/studio-publication.test.ts'
+      - 'tests/services/publish-check.test.ts'
+      - 'tests/services/nip5d-port*.test.ts'
+      - 'tests/services/media.test.ts'
+      - 'tests/services/current-shell*'
+      - 'tests/fixtures/current-shell/**'
+      - 'scripts/current-shell.ts'
+      - 'scripts/coordinated-audio.test.ts'
+      - 'docs/examples/coordinated-audio.ts'
+      - 'tests/services/fixtures/publication-server.ts'
+      - 'tests/services/fixtures/studio-publication.tsx'
+      - 'tests/services/fixtures/capture-failure.ts'
+      - 'tests/services/fixtures/capture-recording.ts'
+      - 'tests/services/keys-preview.test.ts'
+      - 'tests/services/rich-comments.test.ts'
+      - 'tests/services/gamegrid.test.ts'
+      - 'tests/services/preview-cover.test.ts'
+      - 'tests/services/count-rankings.test.ts'
+      - 'tests/services/shell-dialogs.test.ts'
+      - 'tests/fixtures/gamegrid.tsx'
+      - 'tests/fixtures/preview-cover.tsx'
+      - 'tests/fixtures/count-rankings.tsx'
+      - 'tests/fixtures/shell-dialogs.tsx'
+      - 'tests/services/fixtures/studio-original-preview.tsx'
+      - 'tests/services/studio-remix-network.test.ts'
+      - 'scripts/test-studio-remix-network.sh'
+      - 'tests/services/fixtures/studio-browser-git.worker.ts'
+      - 'package.json'
+      - 'bun.lock'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-services-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  remix-network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.3.11'
+      - run: bun install --frozen-lockfile
+      - run: |
+          bash .github/scripts/ubuntu-mirror.sh
+          sudo apt-get update && sudo apt-get install -y nftables iproute2 openssl
+      - name: Import a remix through the actual Studio egress policy
+        run: bash scripts/test-studio-remix-network.sh
+  proposals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: go1.25.0
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.3.11'
+      - run: bun install --frozen-lockfile
+      - name: Install native service prerequisites
+        run: |
+          bash .github/scripts/ubuntu-mirror.sh
+          sudo apt-get update
+          if ! sudo apt-get install -y build-essential pkg-config libssl-dev; then
+            dpkg --print-architecture
+            apt-cache policy build-essential libc6-dev gcc g++ make dpkg-dev
+            apt-config dump | grep -E 'Architecture|Default-Release|Preferences|Dir::State'
+            for file in /etc/apt/preferences /etc/apt/preferences.d/*; do
+              if [ -f "$file" ]; then cat "$file"; fi
+            done
+            exit 1
+          fi
+          studio_rust="$(bun -e 'import pin from "./services/grasp/upstream.json"; process.stdout.write(pin.rust)')"
+          rustup toolchain install "$studio_rust" --profile minimal
+          printf 'RUSTUP_TOOLCHAIN=%s\n' "$studio_rust" >> "$GITHUB_ENV"
+          go version
+      - name: Install browser test prerequisites
+        run: |
+          bash .github/scripts/ubuntu-mirror.sh
+          bunx playwright install --with-deps chromium
+      - name: Verify relay COUNT, synchronization and compatibility patches
+        run: bun run test:relay
+      - name: Build pinned services and verify proposals and browser Git
+        # Keep Chromium and Bun's embedded service servers in separate processes;
+        # combining the suites can stall service teardown on Linux.
+        run: bun run test:studio:services
+      - name: Verify contribution history and exact author payments
+        run: bun test apps/web/src/lib/contribution-history.test.ts packages/community/src/zaps.test.ts packages/client/src/zap-payments.test.ts
+      - name: Verify production shell and Studio account composition
+        run: bun run build && bun test tests/services/studio-shell.test.ts && bun test tests/services/studio-preview.test.ts
+      - name: Verify initial remix gameplay and preview transitions
+        run: bun test tests/services/studio-original-preview.test.ts
+      - name: Verify native CVM payments and wallet checkout
+        # Isolate Bun's browser fixture bundles between suites.
+        run: |
+          bun test tests/services/cvm-payments.test.ts
+          bun test tests/services/cvm-checkout-browser.test.ts
+      - name: Verify optional wallet, cache and loading lifecycle
+        # Keep browser fixtures in separate Bun processes, as with the Studio
+        # suites above: combined embedded servers can stall on Linux teardown.
+        run: |
+          bun test packages/wallet
+          bun test tests/services/wallet-cache.test.ts
+          bun test tests/services/wallet-loading.test.ts
+          bun test tests/services/optional-wallet.test.ts
+      - name: Verify update publication and sandbox media capture
+        run: bun test tests/services/studio-publication.test.ts && bun test tests/services/publish-check.test.ts
+      - name: Verify private port identity and sandbox revocation
+        run: bun test tests/services/nip5d-port-privacy.test.ts && bun test tests/services/nip5d-port-browser.test.ts
+      - name: Verify media ownership and audio controls through the real shim
+        run: bun test tests/services/media.test.ts
+      - name: Verify current manifests in an independent shell
+        run: bun scripts/current-shell.ts
+      - name: Verify napplet sessions survive visibility changes
+        run: bun test tests/services/keys-preview.test.ts && bun test tests/services/rich-comments.test.ts
+      - name: Verify Gamegrid controls, preview playback and fullscreen dialogs
+        run: |
+          bun test tests/services/gamegrid.test.ts
+          bun test tests/services/preview-cover.test.ts
+          bun test tests/services/count-rankings.test.ts
+          bun test tests/services/shell-dialogs.test.ts

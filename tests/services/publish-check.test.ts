@@ -1,10 +1,117 @@
 import { expect, test } from 'bun:test';
-import { checkPublication } from '../../apps/cli/src/publish-check';
+import { capturePreview } from '../../apps/cli/src/publish-check';
+import { browserEngine } from '../../apps/cli/src/browser';
 import sharp from 'sharp';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { screenshotProject } from '../../apps/cli/src/project-config';
+import { recordingSchema } from '../../packages/publish/src/config';
+import { RUNTIME_PROFILE } from '../../packages/runtime/src/capabilities';
+import { sha256 } from '../../packages/protocol/src';
+
+test('capture uses the pinned viewport without waiting for element stability', async () => {
+  const browser = await (await browserEngine()).chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 850 } });
+    await page.setContent(
+      '<style>@keyframes drift{to{transform:translateY(40px)}}iframe{position:fixed;left:0;top:0;width:1200px;height:750px;border:0;animation:drift .25s infinite alternate linear}</style><iframe srcdoc="<style>html,body{background:rgb(20,100,180)}</style>"></iframe>',
+    );
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    await expect(page.locator('iframe').screenshot({ timeout: 1000 })).rejects.toThrow('stable');
+    const screenshot = await capturePreview(page, { width: 1200, height: 750 });
+    const pixel = await sharp(screenshot)
+      .extract({ left: 600, top: 400, width: 1, height: 1 })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+    expect([...pixel]).toEqual([20, 100, 180]);
+  } finally {
+    await browser.close();
+  }
+}, 15000);
+
+test('a real capture process failure preserves the browser cause and does not blame app startup', async () => {
+  const child = Bun.spawn(
+    [process.execPath, new URL('./fixtures/capture-failure.ts', import.meta.url).pathname],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+  const [code, output] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+  expect(code).toBe(1);
+  expect(output).toContain('PREVIEW_CAPTURE');
+  expect(output).toContain('Target page, context or browser has been closed');
+  expect(output).toContain('Retry capture or keep the existing release media');
+  expect(output).not.toContain('BROWSER_CHECK');
+}, 15000);
+
+test('scripted captures focus keyboard controls, scale portrait clicks and take the cover during play', async () => {
+  const config = new TextEncoder().encode(
+    JSON.stringify({
+      schema: 'space-local-project/v1',
+      name: 'Start screen fixture',
+      license: 'MIT',
+      previewId: crypto.randomUUID(),
+      entry: 'index.html',
+      preview: { delayMs: 250 },
+    }),
+  );
+  const html = new TextEncoder().encode(`<!doctype html><style>
+    html,body{margin:0;width:100%;height:100%;background:rgb(180,20,20)}
+    button{position:absolute;left:40%;top:40%;width:20%;height:20%}
+    </style><button>Play</button><script>
+    const play=()=>{document.body.style.background='rgb(20,180,20)';document.querySelector('button').remove()};
+    document.querySelector('button').onclick=play;
+    window.addEventListener('keydown',e=>{if(e.code==='Space')play()});
+    </script>`);
+  for (const portrait of [false, true]) {
+    const child = Bun.spawn(
+      [process.execPath, new URL('./fixtures/capture-recording.ts', import.meta.url).pathname],
+      {
+        stdin: new Blob([
+          JSON.stringify({
+            config: new TextDecoder().decode(config),
+            html: new TextDecoder().decode(html),
+            recording: recordingSchema.parse({
+              durationMs: 2000,
+              actions: portrait
+                ? [{ type: 'click', atMs: 0, x: 480, y: 300 }]
+                : [
+                    { type: 'keyDown', atMs: 0, key: 'Space' },
+                    { type: 'keyUp', atMs: 100, key: 'Space' },
+                  ],
+            }),
+            viewport: portrait ? { width: 360, height: 640 } : undefined,
+          }),
+        ]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
+    );
+    const timeout = setTimeout(() => child.kill('SIGKILL'), 12000);
+    let result: { preview: string; videoBytes: number };
+    try {
+      const [code, out, err] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect(code, out + err).toBe(0);
+      result = JSON.parse(out);
+    } finally {
+      clearTimeout(timeout);
+      if (child.exitCode === null) child.kill('SIGKILL');
+      await child.exited;
+    }
+    const pixel = await sharp(Buffer.from(result.preview, 'base64'))
+      .extract({ left: 10, top: 10, width: 1, height: 1 })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+    expect([...pixel]).toEqual([20, 180, 20]);
+    expect(result.videoBytes).toBeGreaterThan(1000);
+  }
+}, 45000);
 
 async function checkCli(contents: Map<string, Uint8Array>) {
   const directory = await mkdtemp(join(tmpdir(), 'napplet-startup-check-'));
@@ -80,14 +187,102 @@ test.each([
       expect(outcome.out).toContain(errorMessage);
     } else {
       expect(outcome.code, outcome.out + outcome.err).toBe(0);
-      expect(outcome.data).toMatchObject({ profile: 'space-playback-4' });
+      expect(outcome.data).toMatchObject({ profile: RUNTIME_PROFILE });
+      expect(outcome.data.coverage).toMatchObject({
+        startup: 'passed',
+        interaction: { status: 'not-run', actions: 0 },
+        mediaCoordination: 'not-verified',
+        independentHost: 'not-run',
+      });
+      expect(outcome.data.warnings.join(' ')).toContain('Gameplay correctness');
     }
   },
   15000,
 );
 
+test('CLI exercises configured inputs and catches networking that only starts after play', async () => {
+  const config = {
+    schema: 'space-local-project/v1',
+    name: 'Interaction check',
+    license: 'MIT',
+    previewId: crypto.randomUUID(),
+    entry: 'index.html',
+    requires: [],
+    relays: [],
+    servers: [],
+    preview: {
+      delayMs: 250,
+      recording: {
+        durationMs: 2000,
+        actions: [
+          { type: 'keyDown', atMs: 0, key: 'Space' },
+          { type: 'keyUp', atMs: 100, key: 'Space' },
+        ],
+      },
+    },
+  };
+  const contents = new Map([
+    ['napplet.json', new TextEncoder().encode(JSON.stringify(config))],
+    [
+      'index.html',
+      new TextEncoder().encode(`<!doctype html><p>Press Space</p><script>
+      onkeydown=()=>fetch('https://must-not-contact.invalid/play').catch(()=>{});
+    </script>`),
+    ],
+  ]);
+  const bad = await checkCli(contents);
+  expect(bad.code, bad.out + bad.err).toBe(1);
+  expect(bad.data.error.code).toBe('BROWSER_CHECK');
+  expect(bad.out).toContain('content security policy violation');
+  contents.set(
+    'index.html',
+    new TextEncoder().encode(`<!doctype html><p>Press Space</p><script>
+    onkeydown=()=>{document.querySelector('p').textContent='Playing'};
+  </script>`),
+  );
+  const good = await checkCli(contents);
+  expect(good.code, good.out + good.err).toBe(0);
+  expect(good.data.coverage).toMatchObject({
+    startup: 'passed',
+    interaction: { status: 'exercised', actions: 2, source: 'preview.recording' },
+    independentHost: 'not-run',
+    mediaCoordination: 'not-verified',
+  });
+  expect(good.data.warnings.join(' ')).toContain('Gameplay correctness');
+}, 30000);
+
 test('capture contains the app pixels, saves a selected image, and validates chosen images', async () => {
   const root = await mkdtemp(join(tmpdir(), 'napplet-capture-'));
+  // Match real CLI invocations: reusing Playwright's in-process driver for the
+  // repeated capture/check operations can hang Chromium in Bun on CI.
+  const run = async (command: 'screenshot' | 'check') => {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        new URL('../../apps/cli/src/index.ts', import.meta.url).pathname,
+        command,
+        '--project',
+        root,
+        '--network',
+        'local',
+        '--json',
+      ],
+      { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
+    );
+    const timeout = setTimeout(() => child.kill('SIGKILL'), 12000);
+    try {
+      const [code, out, err] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { code, out, err, data: JSON.parse(out) };
+    } finally {
+      clearTimeout(timeout);
+      if (child.exitCode === null) child.kill('SIGKILL');
+      await child.exited;
+    }
+  };
   try {
     const config = {
       schema: 'space-local-project/v1',
@@ -102,7 +297,9 @@ test('capture contains the app pixels, saves a selected image, and validates cho
     await Bun.write(join(root, 'napplet.json'), JSON.stringify(config));
     await Bun.write(join(root, 'index.html'), html);
     await Bun.write(join(root, 'LICENSE'), 'MIT license');
-    const result = await screenshotProject(root, 'local');
+    const captured = await run('screenshot');
+    expect(captured.code, captured.out + captured.err).toBe(0);
+    const result = captured.data;
     const bytes = await Bun.file(result.image).bytes();
     const metadata = await sharp(bytes).metadata();
     expect([metadata.width, metadata.height]).toEqual([1200, 750]);
@@ -113,19 +310,151 @@ test('capture contains the app pixels, saves a selected image, and validates cho
       .toBuffer();
     expect([...pixel]).toEqual([20, 100, 180]);
     expect((await Bun.file(join(root, 'napplet.json')).json()).preview.image).toBe('preview.png');
-    await expect(screenshotProject(root, 'local')).rejects.toMatchObject({
-      code: 'PREVIEW_EXISTS',
-    });
+    const duplicate = await run('screenshot');
+    expect(duplicate.code, duplicate.out + duplicate.err).toBe(1);
+    expect(duplicate.out + duplicate.err).toContain('PREVIEW_EXISTS');
     expect(await Bun.file(result.image).bytes()).toEqual(bytes);
-    const selected = new Map([
-      ['napplet.json', await Bun.file(join(root, 'napplet.json')).bytes()],
-      ['index.html', new TextEncoder().encode(html)],
-      ['preview.png', bytes],
-    ]);
-    expect((await checkPublication(selected)).preview).toEqual(bytes);
-    selected.set('preview.png', new TextEncoder().encode('<svg>not a PNG</svg>'));
-    await expect(checkPublication(selected)).rejects.toMatchObject({ code: 'PREVIEW_IMAGE' });
+    // A deliberately different valid PNG proves check reuses the chosen bytes.
+    const chosen = await sharp(bytes).resize(8, 8).png().toBuffer();
+    await Bun.write(result.image, chosen);
+    const selected = await run('check');
+    expect(selected.code, selected.out + selected.err).toBe(0);
+    expect(selected.data.status).toBe('checked');
+    expect(selected.data.previewBytes).toBe(chosen.length);
+    expect(await Bun.file(result.image).bytes()).toEqual(new Uint8Array(chosen));
+    await Bun.write(join(root, 'preview.png'), '<svg>not a PNG</svg>');
+    const invalid = await run('check');
+    expect(invalid.code, invalid.out + invalid.err).toBe(1);
+    expect(invalid.out + invalid.err).toContain('PREVIEW_IMAGE');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 }, 30000);
+
+test('CLI checks explicitly retained media without capture-only selectors, but rejects changed clips and broken updates', async () => {
+  const html = new TextEncoder().encode('<!doctype html><p>Updated creation</p>');
+  const clip = await Bun.file(new URL('../fixtures/preview.webm', import.meta.url)).bytes();
+  const image = new Uint8Array(
+    await sharp({ create: { width: 8, height: 8, channels: 3, background: '#006563' } })
+      .png()
+      .toBuffer(),
+  );
+  const config = {
+    schema: 'space-local-project/v1',
+    name: 'Reviewed update',
+    entry: 'index.html',
+    license: 'MIT',
+    previewId: crypto.randomUUID(),
+    preview: {
+      delayMs: 250,
+      image: 'cover.png',
+      readySelector: '.needs-live-relay-data',
+      video: {
+        file: 'clip.webm',
+        artifactHash: '0'.repeat(64),
+        reviewedFor: { artifactHash: await sha256(html), videoHash: await sha256(clip) },
+      },
+    },
+  };
+  const contents = new Map([
+    ['napplet.json', new TextEncoder().encode(JSON.stringify(config))],
+    ['index.html', html],
+    ['cover.png', image],
+    ['clip.webm', clip],
+  ]);
+  const passing = await checkCli(contents);
+  expect(passing.code, passing.out + passing.err).toBe(0);
+  contents.set('clip.webm', new Uint8Array([...clip, 0]));
+  const changedClip = await checkCli(contents);
+  expect(changedClip.data.error.code).toBe('PREVIEW_VIDEO_STALE');
+  contents.set('clip.webm', clip);
+  const broken = new TextEncoder().encode(
+    '<!doctype html><script>throw new Error("Broken merged creation")</script>',
+  );
+  contents.set('index.html', broken);
+  const changedBuild = await checkCli(contents);
+  expect(changedBuild.data.error.code).toBe('PREVIEW_VIDEO_STALE');
+  config.preview.video.reviewedFor.artifactHash = await sha256(broken);
+  contents.set('napplet.json', new TextEncoder().encode(JSON.stringify(config)));
+  const brokenBuild = await checkCli(contents);
+  expect(brokenBuild.code).toBe(1);
+  expect(brokenBuild.data.error.code).toBe('BROWSER_CHECK');
+  expect(brokenBuild.out).toContain('Broken merged creation');
+}, 40000);
+
+// NIP-5D port-bound identity (dskvr/nips PR 14/15) and the napplet/evil findings,
+// through the real CLI, preview host, upstream shim and Chromium.
+test.each([
+  [
+    'a legacy window-level NAP request',
+    `<!doctype html><script>parent.postMessage({ type: 'theme.get', id: 'legacy' }, '*')</script>`,
+    'NAPPLET_REVOKED',
+    'window-level message outside its NIP-5D port',
+  ],
+  [
+    'a bundled second handoff',
+    `<!doctype html><script>
+    const channel = new MessageChannel();
+    parent.postMessage({ type: 'napplet.hello' }, '*', [channel.port2]);
+    </script>`,
+    'NAPPLET_REVOKED',
+    'second-hello',
+  ],
+  [
+    'a document that reloads itself',
+    `<!doctype html><script>addEventListener('load', () => setTimeout(() => location.reload(), 20))</script>`,
+    'NAPPLET_REVOKED',
+    'replaced its verified document',
+  ],
+  [
+    'a pre-load navigation to minted unverified bytes',
+    `<!doctype html><script>
+    const page = '<script>parent.postMessage("escaped", "*")<' + '/script>';
+    location.href = URL.createObjectURL(new Blob([page], { type: 'text/html' }));
+    </script>`,
+    'BROWSER_CHECK',
+    'content security policy violation',
+  ],
+  [
+    'WebRTC construction in the napplet realm',
+    `<!doctype html><script>
+    const exposed = Object.getOwnPropertyNames(globalThis).filter(name => /RTC/.test(name) && globalThis[name] !== undefined);
+    if (exposed.length) throw new Error('WebRTC reachable: ' + exposed.join(','));
+    napplet.shell.ready().then(() => napplet.identity.getPublicKey()).then(() => document.title = 'bound');
+    </script>`,
+    null,
+    null,
+  ],
+])(
+  'NIP-5D binding: %s',
+  async (_, html, code, detail) => {
+    const config = new TextEncoder().encode(
+      JSON.stringify({
+        schema: 'space-local-project/v1',
+        name: 'Binding check',
+        license: 'MIT',
+        preview: { delayMs: 500 },
+        previewId: crypto.randomUUID(),
+        entry: 'index.html',
+        requires: [],
+        relays: [],
+        servers: [],
+      }),
+    );
+    const outcome = await checkCli(
+      new Map([
+        ['napplet.json', config],
+        ['index.html', new TextEncoder().encode(html)],
+      ]),
+    );
+    if (code) {
+      expect(outcome.code, outcome.out + outcome.err).toBe(1);
+      expect(outcome.data.error).toMatchObject({ code });
+      expect(outcome.out).toContain(detail!);
+    } else {
+      expect(outcome.code, outcome.out + outcome.err).toBe(0);
+      expect(outcome.data).toMatchObject({ profile: RUNTIME_PROFILE });
+    }
+  },
+  15000,
+);

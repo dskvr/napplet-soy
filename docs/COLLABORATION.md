@@ -125,8 +125,8 @@ An agent can merge the exact reviewed revision and target:
 
 ```sh
 soyli merge <proposal-id> --revision <reviewed-event-id> --target <reviewed-local-HEAD>
-soyli push       # publish Git state and merged status, without a napplet release
-soyli publish    # deliberately release the merged napplet
+soyli publish    # publish hosted Git source, mark included proposals merged, and release
+# Or use soyli push to publish Git state and merged status without a napplet release
 ```
 
 Merging does not delete the proposal, its revisions or discussion. `soyli push`
@@ -164,6 +164,44 @@ The local-review command appears only after selecting a proposal; the empty inbo
 shows contribution guidance. Long commands wrap visually and copy as one command.
 External proposals without Soy metadata remain visible, with a local-review command.
 External patch roots (1617) can be read; applying/revising patch series uses ngit.
+
+For named napplets, the signed-in original author can select **Review & merge in
+Studio** on the original listing. A separate private workspace pins the proposal
+revision and current target, rebuilds the merged source, and presents the diff and
+playable candidate before confirmation. The workspace is labelled **Merge review**,
+links the published proposal and shows its contributor. Proposal cards show **Proposed
+by** with the signed root author's profile or public-key fallback; this can differ
+from the napplet author or repository maintainer.
+
+The merged candidate is pinned before project tools run. Its committed contributor
+tests and guidance are part of the reviewed source; later changes to protected files
+are still refused. Hosted dependencies must match an operator-installed profile.
+The private sandbox check tests the merged executable independently of inherited
+listing clips and capture-only ready selectors, without changing those settings in
+source. An existing cover is retained and validated. The offline sandbox still
+requires the host handshake and rejects script errors; a selector waiting for live
+relay data belongs to the separate capture flow. After merging, **Publish update**
+can retain the original listing and media, subject to an explicit review against
+the updated build; **Capture new media** offers re-recording instead. See
+[media reuse](PREVIEWS.md#short-video-previews--soyli-070). Older failed reviews without
+a pinned candidate require a fresh review. These profile/review checks were deployed
+with the controller and additive worker image on 2026-10-23; see the
+[deployment evidence](DEPLOYMENT.md#most-recent-application-deployment--proposal-reviews-2026-10-23).
+
+Source sharing reuses `push` and its durable NIP-34 state/status outbox; no wrapper event is introduced. Retrying the same reviewed
+browser merge reuses its signed events, even after delivery succeeded. Publishing the
+resulting napplet is a separate action, preserving its named coordinate and refusing
+a stale release anchor.
+The merge button shows **Merging…** immediately, with a spinner and live source/status
+delivery details until the result arrives. Merge signatures use the selected shell
+account, including standard NIP-34 kind-1631 merge status; signing permissions are
+shared with Studio's publication policy. Remote signers may request approval for
+that event kind.
+The shell's **My work** dashboard links incoming/outgoing proposals and recent public
+activity. Repository lookups retain the relay hints in the manifest's source link
+alongside publication and configured fallback relays; Git proposals need not live
+on the napplet catalog's relays. Unread markers stay in the browser for each account. See
+[Studio collaboration](QUICK-VIBE.md#propose-changes-from-a-remix) for the UI flow.
 
 ## Optional runnable preview attachment
 
@@ -215,3 +253,63 @@ order, filtering unsupported alternatives before applying that limit. An SSH or
 other unsupported alternative does not block a usable HTTPS host (loopback HTTP
 in the explicit local profile). No eligible host produces an actionable error before
 preview preparation or upload. The repository announcement is unchanged.
+
+### Proposal status during publication
+
+`soyli publish` also marks included open/draft Git proposals merged after confirming
+source delivery. It shares `push`'s ancestry, target-branch and current-revision
+checks; unrelated proposals and patches are left alone. Signed applied events are
+saved in the release journal before source delivery and reused by
+`soyli publish --resume` after a failure. A newer proposal revision is never closed
+by an older saved acceptance.
+
+For hosted source, this applies to the published `main` branch. Linked repositories
+remain read-only for Git/state: status reconciliation applies when the checked-out
+branch's signed tip equals the release commit and the selected author is an
+announced maintainer. Other linked branch layouts remain publishable without
+automatic status changes. Relay hints from the source URL remain usable even when
+the announcement omits its optional `relays` tag.
+
+The release journal pins the reviewed target branch alongside its signed statuses.
+Before sending them, including on resume, soyLI rechecks that branch's signed tip,
+maintainer authority and the clone's served branch. A tag retaining the release
+commit does not prove the target was merged. A changed or unknown target stops
+status delivery with an actionable error; correcting the target lets resume reuse
+the original signatures. Switching local branches does not retarget saved statuses.
+
+## Contribution graph
+
+On a napplet listing, **How it grew** presents a horizontal history of published
+versions, proposals and signed merge reports. Each release/proposal shows its
+signed author through the shared profile/avatar cache, date and source commit;
+proposals also show status, revision count and comment count. Selecting a proposal
+opens the existing revision, playback and author-management controls below it.
+
+The default milestone view keeps the first known release, the viewed release and
+releases referenced as proposal bases. **All releases** includes the remaining
+retained versions. The graph scrolls within its own region on small screens, with
+keyboard focus and earlier/later controls. It uses the shared light/dark theme.
+
+Proposal data still comes from Nostr with repository relay hints. Optional signed
+release history comes from the existing retained-history endpoint and is validated
+in the client. Missing history leaves available releases and proposals visible.
+An exact `merge-base`/`source-commit` match links a branch to a release; otherwise
+an unattributed source marker makes the gap explicit. Signed merge statuses are
+shown as reports, separately from publication. The dotted main line indicates
+time, not verified Git parentage. Neither the earliest retained version nor an
+unavailable base is asserted to be the initial Git commit. The graph does not fetch
+or execute Git source, introduce events or change the existing proposal-query bounds.
+
+**Zap** on a release/proposal pays that event's author, not the enclosing napplet's
+author or the maintainer who merged it. The dialog identifies both contribution
+and recipient. Lightning requests/receipts pin the exact event ID and kind;
+version-specific invoice recovery remains separate from address-wide payments.
+Nutzaps use the same signed event target and recipient's NIP-61 wallet; existing
+addressable-event tags remain supported. Buttons require discovered recipient
+payment metadata and retain the existing split-zap guard. This is individual
+contribution tipping, not automatic contributor splits or cumulative graph totals.
+Existing pending napplet/comment invoices remain readable. No real payment is
+made by opening or browsing the graph.
+
+Deployed on 2026-10-25. See the [deployment verification](DEPLOYMENT.md#most-recent-application-deployment--contribution-graph-2026-10-25)
+for the released source, checks and retained limitations.

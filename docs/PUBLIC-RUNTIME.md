@@ -1,5 +1,17 @@
 # Napplet playback profile
 
+The 2026-11-02 source uses profile `space-playback-8` (not yet deployed/released).
+Each napplet's identity is bound to the MessagePort from its bootstrap's single
+`napplet.hello`; replacement evidence closes the port, revokes every grant and
+removes the frame. See [PROTOCOL.md](PROTOCOL.md). The 2026-10-27 changes below
+remain in effect.
+Operations no longer wait for optional SHELL initialization; `shell.supports`
+checks installed namespaces immediately. Account and frame authority are unchanged.
+NAP-MEDIA now coordinates napplet-owned audio alongside shell-owned streams;
+see [MEDIA.md](MEDIA.md). Historical checkpoints below describe their dated scope.
+The [compliance audit](NIP5D-COMPLIANCE-AUDIT-2026-10-27.md) distinguishes remaining
+interoperability work from implemented corrections.
+
 2026-10-13 OUTBOX source update: web and preview share an account-scoped Applesauce
 store/loaders, verified NIP-65 planner, live route refresh and consented general
 event publication. Own write relays, required recipient read relays and explicit
@@ -47,9 +59,16 @@ Fixtures and relay-imported napplets use the same manifest validator, capability
 
 Named/root manifests retain their existing author/address/build storage and settings scopes across the old-to-new manifest migration, computed from verified HTML bytes. Legacy snapshots keep their validated own-address sharing. New standalone snapshots have an independent author/event/build scope; their optional ancestry never grants parent saves, account backend bindings or social identity. New soyLI pinned URLs use the exact named manifest revision so that the named app keeps its scope. See [migration details](NIP5D-MIGRATION.md). The new protocol artifact identity is the raw SHA-256; the physical legacy-derived save key is a compatibility detail. Old fixture-only prototype saves remain unmigrated.
 
-The browser injects the published **@napplet/shim 0.31.0** prelude, with transitive **@napplet/nap 0.33.0** and **@napplet/core 0.33.0** pinned in the lockfile. These are protocol bindings, not another catalog: discovery remains Applesauce queries against Nostr relays. The shim is loaded with the player route, not by executing an external script inside a napplet.
+The browser injects the published **@napplet/shim 0.35.0** prelude, with transitive **@napplet/nap 0.36.0** and **@napplet/core 0.37.0** pinned in the lockfile. Before it runs, the bootstrap removes the napplet realm's `RTC*` constructors. These are protocol bindings, not another catalog: discovery remains Applesauce queries against Nostr relays. The shim is loaded with the player route, not by executing an external script inside a napplet.
 
-Space adds the [NAP-SHELL handshake](https://github.com/napplet/naps/blob/master/naps/NAP-SHELL.md), absent from that shim release. `shell.ready` establishes one frame session; `shell.init` replies once; `shell.ready()`, `onReady()`, `supports()` and `services` expose its environment. Unknown message types are silently ignored before quota accounting; recognized operations can still return policy errors. The host verifies `MessageEvent.source` and the opaque origin, and binds identity to the verified manifest before accepting requests. Messages cannot choose a different author, build, account, or storage namespace.
+The pinned global bundle includes a local dependency patch in
+`packages/runtime/patches`. It captures native port-send and message-data access
+before napplet code runs, so replacing browser prototypes cannot expose the private
+transport port. Chromium regressions exercise both interception routes against the
+actual installed bundle; the same bundle is used by the website and soyLI previews.
+Remove this patch only after an upstream replacement passes those regressions.
+
+The shim provides the [NAP-SHELL handshake](https://github.com/napplet/naps/blob/master/naps/NAP-SHELL.md) over the port. `shell.ready` establishes one session; `shell.init` replies once; `shell.ready()`, `onReady()`, `supports()` and `services` expose its environment. Unknown message types are silently ignored before quota accounting; recognized operations can still return policy errors. The host accepts one `napplet.hello` from the created frame's `contentWindow`, with an opaque origin and exactly one port, and binds the verified identity to that port. It never replies through the frame `Window`. Messages cannot choose a different author, build, account, or storage namespace.
 
 References: [NAP registry and web projection](https://github.com/napplet/naps), [upstream implementation](https://github.com/napplet/web/tree/1df6dc87e5eee7257af41efb6247d47ec019e3d8/packages), and [NIP-5D proposal](https://github.com/nostr-protocol/nips/pull/2303). Several domains remain draft contracts. This is an implemented playback profile, not a claim of complete registry conformance.
 
@@ -123,6 +142,22 @@ Queued cancellation starts no request. There is no server resource cache on this
 path; shim Blobs belong to the frame and disappear on teardown.
 
 Relay access is through a frame-owned Applesauce pool. Filters, event counts, request concurrency, relay selection and subscription lifetime are bounded. Live subscriptions close after five minutes or 500 accepted events; the napplet receives a closure notification. Stopping/restarting or navigating away destroys the frame session, closes subscriptions and sockets, aborts resources and pending prompts, and revokes download URLs. Account changes preserve the iframe and its single SHELL handshake: old requests are cancelled, subscriptions close, resources abort, prompts/exports clear, and account-scoped storage/files are replaced before `identity.changed` is sent. Late results are suppressed. Shared saves remain available when returning to the same account; instance storage and virtual files start fresh. Napplets must listen to `identity.onChanged` to refresh their own in-memory account state.
+
+Switching browser tabs/windows or scrolling a running napplet out of view preserves
+its iframe, in-memory state and host session, including transient storage. This
+applies to detail/immersive players, compact comment/gallery players and Studio's
+original-remix preview. Starting another explicit player still stops the previous
+one. Decorative clips retain their visibility-based cleanup. A tab switch does
+not renew subscription limits or grant additional capabilities.
+
+Browsers may throttle timers, pause animation frames or discard background pages;
+preserving a session does not guarantee continuous background execution or recovery
+after browser eviction. Gameplay pause/resume belongs to the napplet. Authors
+should clear held keyboard/touch input on `blur` and when `document.hidden` becomes
+true, and handle the elapsed-time gap on return. The existing soyLI gamepad helper
+neutralizes input on focus loss. The shell cannot clear arbitrary app-owned input
+state and does not synthesize key events. These are shell lifecycle and application
+choices; no NIP-5D/NAP messages or upstream pins change.
 
 ## Immersive links
 

@@ -1,31 +1,27 @@
 import { RUNTIME_DOMAINS } from './capabilities';
 import { validateConfigSchema } from './config-schema';
+import { createWebmcpBinding } from './webmcp/binding';
+import { createFipsBinding } from './fips/binding';
 
-/** NAP-SHELL supplements the pinned upstream domain shim, which does not yet provide it. */
-export const SHELL_PRELUDE = `
+/**
+ * Interim WebRTC removal from the pending NIP-5D revision (dskvr/nips PR 16/17).
+ * Neither the iframe sandbox nor CSP governs WebRTC, and a page cannot disable it
+ * for its iframes. NAP-WEBRTC peer connections stay in the shell realm, so the
+ * napplet realm has no legitimate use for these constructors. A napplet can still
+ * nest a srcdoc frame with its own constructors; this narrows, not closes, the
+ * channel.
+ */
+export const WEBRTC_REMOVAL = `
 (() => {
-  let environment;
-  const listeners = new Set();
-  let resolveReady;
-  const ready = new Promise(resolve => { resolveReady = resolve; });
-  window.addEventListener('message', event => {
-    if (event.source !== window.parent || event.data?.type !== 'shell.init' || environment) return;
-    environment = Object.freeze(event.data);
-    resolveReady(environment);
-    for (const listener of listeners) { try { listener(environment); } catch {} }
-    listeners.clear();
-  });
-  window.napplet.shell = Object.freeze({
-    ready: () => ready,
-    supports: domain => !!environment?.capabilities?.domains?.includes(domain),
-    get services() { return environment?.services || []; },
-    onReady: handler => {
-      if (environment) queueMicrotask(() => handler(environment));
-      else listeners.add(handler);
-      return { close: () => listeners.delete(handler) };
-    },
-  });
-  window.parent.postMessage({type: 'shell.ready'}, '*');
+  const names = new Set(Object.getOwnPropertyNames(globalThis).filter(name => name.startsWith('RTC')));
+  for (const prefix of ['webkit', 'moz'])
+    for (const name of ['RTCPeerConnection', 'RTCSessionDescription', 'RTCIceCandidate'])
+      names.add(prefix + name);
+  for (const name of names) {
+    try {
+      Object.defineProperty(globalThis, name, { value: undefined, writable: false, configurable: false, enumerable: false });
+    } catch {}
+  }
 })();`;
 
 /** Empty-slot count of the host browser's own Gamepad API (4 in Chromium, 0 in Firefox). */
@@ -38,27 +34,27 @@ export function hostGamepadSlots() {
 }
 
 /**
- * NAP-GAMEPAD binding (merged upstream draft, docs/NAP-GAMEPAD.md). Permissions-Policy
+ * NAP-GAMEPAD binding (proposed upstream draft, docs/NAP-GAMEPAD.md). Permissions-Policy
  * leaves the native API in player frames but makes it throw. Only in that case is the
  * one denied operation replaced, with native property attributes, name, length and
  * receiver check. Events and handlers stay native. Frames where the browser lacks the
  * API, or the host allows native access, keep their native surface unchanged.
  * The standard window.napplet.gamepad binding is always installed.
  */
-export function gamepadPrelude(slots = hostGamepadSlots()) {
-  return `
-(() => {
+function nativeGamepadCompatibility(slots = hostGamepadSlots()) {
+  return `(() => {
   const native = Navigator.prototype.getGamepads;
   let replaceNative = false;
   if (typeof native === 'function') {
     try { native.call(navigator); }
     catch (error) { replaceNative = error?.name === 'SecurityError'; }
   }
+  if (!replaceNative) return;
   const PadProto = typeof Gamepad === 'function' ? Gamepad.prototype : Object.prototype;
   const ButtonProto = typeof GamepadButton === 'function' ? GamepadButton.prototype : Object.prototype;
   const EventProto = typeof GamepadEvent === 'function' ? GamepadEvent.prototype : Event.prototype;
   let state = { available: true, focused: false }, raw = [], current = Array(${Math.max(0, Math.min(8, Math.trunc(slots) || 0))}).fill(null);
-  const changes = new Set();
+
   const own = (proto, values) => {
     const object = Object.create(proto);
     for (const key of Object.keys(values))
@@ -88,9 +84,7 @@ export function gamepadPrelude(slots = hostGamepadSlots()) {
     Object.defineProperty(event, 'gamepad', { value: gamepad, enumerable: true });
     window.dispatchEvent(event);
   };
-  window.addEventListener('message', event => {
-    const data = event.data;
-    if (event.source !== window.parent || data?.type !== 'gamepad.state' || !Array.isArray(data.pads)) return;
+  window.napplet.gamepad.onChange(data => {
     const before = raw;
     raw = data.pads.slice(0, 8).map(value => value && typeof value === 'object' ? value : null);
     current = raw.map((value, index) => value && pad(value, index));
@@ -103,7 +97,7 @@ export function gamepadPrelude(slots = hostGamepadSlots()) {
       if (old && !same) emit('gamepaddisconnected', pad(old, index, false));
       if (next && !same) emit('gamepadconnected', current[index]);
     }
-    for (const listener of changes) { try { listener({ ...state, pads: current.slice() }); } catch {} }
+
   });
   const replacement = {
     getGamepads() {
@@ -113,27 +107,24 @@ export function gamepadPrelude(slots = hostGamepadSlots()) {
       return current.slice();
     },
   }.getGamepads;
-  if (replaceNative) Object.defineProperty(Navigator.prototype, 'getGamepads', {
+  Object.defineProperty(Navigator.prototype, 'getGamepads', {
     ...Object.getOwnPropertyDescriptor(Navigator.prototype, 'getGamepads'),
     value: replacement,
   });
-  if (window.napplet && Object.isExtensible(window.napplet))
-    window.napplet.gamepad = Object.freeze({
-      getGamepads: () => current.slice(),
-      get available() { return state.available; },
-      get focused() { return state.focused; },
-      onChange: callback => {
-        changes.add(callback);
-        return { close: () => changes.delete(callback) };
-      },
-    });
-  // The standard binding is independent of optional native-API replacement.
-  window.parent.postMessage({ type: 'gamepad.subscribe' }, '*');
-})();`;
+})()`;
 }
 
-/** The same pinned upstream shim and mandatory shell bootstrap in every host. */
-export function nappletPrelude(shim: string, declaration?: { schema?: unknown }) {
+/**
+ * The pinned upstream shim plus Soy's static config snapshot. The shim opens the
+ * NIP-5D channel before any napplet script runs: it keeps one MessagePort private
+ * and hands the other to the shell in the single window-level `napplet.hello`.
+ * SHELL, like every other domain, travels only over that port.
+ */
+export function nappletPrelude(
+  shim: string,
+  declaration?: { schema?: unknown },
+  slots = hostGamepadSlots(),
+) {
   let schema = null;
   try {
     if (declaration?.schema !== undefined) schema = validateConfigSchema(declaration.schema);
@@ -157,5 +148,6 @@ export function nappletPrelude(shim: string, declaration?: { schema?: unknown })
       },
     });
   })();`;
-  return `${shim}\nglobalThis.NappletShimPrelude.install(${JSON.stringify({ domains: RUNTIME_DOMAINS.filter((d) => d !== 'shell') })});\n${config}\n${SHELL_PRELUDE}\n${gamepadPrelude()}`;
+  const options = `{domains:${JSON.stringify(RUNTIME_DOMAINS)},resourceProfile:(${createFipsBinding.toString()}),toolProfile:(${createWebmcpBinding.toString()})}`;
+  return `${WEBRTC_REMOVAL}\n${shim}\nglobalThis.NappletShimPrelude.install(${options});\n${nativeGamepadCompatibility(slots)};\n${config}`;
 }

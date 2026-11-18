@@ -9,8 +9,9 @@ import { remixSchema } from '../../protocol/src/remix';
 import type { Network } from '../../identity/src/signer';
 import { PublishError, targetsSchema, intentSchema } from './config';
 import { MAX_SOURCE_FILES, MAX_PUBLICATION_JOURNAL_BYTES } from './limits';
+import { checkReportSchema } from './check-report';
 import {
-  MANIFEST_PRESENTATION_PROFILE,
+  DIRECT_PRESENTATION_PROFILES,
   manifestScreenshots,
   manifestPreviewVideo,
 } from '../../protocol/src/presentation';
@@ -80,7 +81,7 @@ export const jobSchema = z
   .object({
     version: z.literal(1),
     // Absent on previously frozen jobs: resume their original linked descriptor.
-    presentationProfile: z.literal(MANIFEST_PRESENTATION_PROFILE).optional(),
+    presentationProfile: z.enum(DIRECT_PRESENTATION_PROFILES).optional(),
     id: hash,
     fingerprint: hash,
     // Absent in older journals: preserve their automatically paired publication.
@@ -111,8 +112,10 @@ export const jobSchema = z
       .int()
       .nonnegative()
       .max(50 * 1024 * 1024),
-    check: z.object({ profile: z.string().max(80), browser: z.string().max(80) }).strict(),
+    check: checkReportSchema,
     releaseRefs: z.record(z.string().regex(/^refs\/tags\/release-[a-f0-9]{16}$/), commit),
+    appliedStatuses: z.array(eventSchema).max(100).optional(),
+    appliedBranch: z.string().min(1).max(1024).optional(),
     source: z.object({ announcement: eventSchema, state: eventSchema }).optional(),
     snapshot: eventSchema.optional(),
     current: eventSchema.optional(),
@@ -184,7 +187,7 @@ export const jobSchema = z
         (job.snapshotMode === 'none' || !!job.snapshot) &&
         (!job.preview ||
           (job.receipts.preview === true &&
-            (job.presentationProfile === MANIFEST_PRESENTATION_PROFILE
+            (job.presentationProfile
               ? !job.preview.descriptor &&
                 [job.current, ...(job.snapshotMode === 'none' ? [] : [job.snapshot])].every(
                   (event) =>
@@ -195,7 +198,7 @@ export const jobSchema = z
                 )
               : !!job.preview.descriptor && job.receipts.descriptor === true))) &&
         (!job.video ||
-          job.presentationProfile !== MANIFEST_PRESENTATION_PROFILE ||
+          !job.presentationProfile ||
           [job.current, ...(job.snapshotMode === 'none' ? [] : [job.snapshot])].every(
             (event) => !!event && manifestPreviewVideo(event)?.hash === job.video!.hash,
           )) &&

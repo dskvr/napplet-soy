@@ -1,16 +1,23 @@
+import { lazy, Suspense } from 'react';
+const MintInvoicePayment = lazy(() =>
+  import('./wallet/wallet-zap').then((m) => ({ default: m.MintInvoicePayment })),
+);
+const NutzapOption = lazy(() =>
+  import('./wallet/wallet-zap').then((m) => ({ default: m.NutzapOption })),
+);
 import { readSocial } from '@/lib/protocol-social';
-import { readAvailableProfile } from '../../../../packages/client/src/social';
 import {
   resolveZapEndpoint,
   requestZapInvoice,
   zapTotals,
   type ZapInvoice,
 } from '../../../../packages/client/src/zaps';
-import { commentScope } from '../../../../packages/protocol/src/social';
+import { commentScope, eventScope } from '../../../../packages/protocol/src/social';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Zap, Check, LoaderCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { useNostr } from './nostr-provider';
+import { useWallet } from './wallet/wallet-provider';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +27,10 @@ import {
   DialogTrigger,
 } from './ui/dialog';
 import { signForAccount, signAnonymousZap } from '@/lib/community-client';
-import { protocolClient, network } from '@/lib/network';
+import { network } from '@/lib/network';
+import { useZapRecipient, paymentClient } from '@/lib/zap-recipient';
+import { CreatorLink } from './creator-link';
+import { walletBootstrapRelays } from '../../../../packages/wallet/src/network';
 import { zapTotalsStore, useZapTotals } from '@/lib/zap-totals';
 import { zapPayments } from '@/lib/zap-payments';
 import type { SignedEvent } from '../../../../packages/protocol/src';
@@ -32,14 +42,17 @@ export function ZapButton({
   data,
   reference,
   commentTarget,
+  contribution,
   trigger,
 }: {
   data: { manifest: SignedEvent; scope: SocialScope; relays: string[] };
   reference: string;
   commentTarget?: SignedEvent;
+  contribution?: { event: SignedEvent; title: string };
   trigger?: ReactElement;
 }) {
   const { pubkey } = useNostr();
+  const { enabled: cashuEnabled } = useWallet();
   const keyRef = useRef(pubkey);
   keyRef.current = pubkey;
   const [open, setOpen] = useState(false),
@@ -56,9 +69,14 @@ export function ZapButton({
     [relayHints, setRelayHints] = useState(data.relays),
     [anonymous, setAnonymous] = useState(!pubkey);
   const asAnonymous = !pubkey || anonymous;
-  const target = commentTarget ?? data.manifest;
-  const scope = commentTarget ? commentScope(commentTarget) : data.scope;
+  const target = contribution?.event ?? commentTarget ?? data.manifest;
+  const scope = contribution
+    ? eventScope(target)
+    : commentTarget
+      ? commentScope(commentTarget)
+      : data.scope;
   const totals = useZapTotals(scope.key);
+  const recipient = useZapRecipient(target.pubkey, data.relays);
   const current = useRef({ open, invoice, target: scope.key });
   current.current = { open, invoice, target: scope.key };
   useEffect(() => {
@@ -106,18 +124,14 @@ export function ZapButton({
     setPaymentState('waiting');
     setAnonymous(!pubkey);
     setWebln(!!(window as any).webln);
+    if (!recipient?.lightning) return () => controller.abort();
     (async () => {
       if (target.tags.some((t) => t[0] === 'zap'))
         throw new Error(
           'This creation requests split zaps. Use a client supporting its recipient split.',
         );
-      const relays = [...new Set([...network().relays, ...data.relays])].slice(0, 8);
-      const event = await readAvailableProfile(
-        protocolClient(),
-        target.pubkey,
-        relays,
-        controller.signal,
-      );
+      const relays = walletBootstrapRelays(network().relays, data.relays);
+      const event = recipient.profile;
       const endpoint = await resolveZapEndpoint(
         target.pubkey,
         event ? [event] : [],
@@ -125,7 +139,13 @@ export function ZapButton({
         controller.signal,
       );
       // Receipt totals are independent of preparing a payment. Keep them in the background.
-      void readSocial(data.manifest, data.relays, controller.signal)
+      void (
+        contribution
+          ? paymentClient()
+              .query([{ kinds: [9735], '#e': [target.id], limit: 150 }], relays, controller.signal)
+              .then((events) => ({ events, manifests: new Map([[target.id, target]]) }))
+          : readSocial(data.manifest, data.relays, controller.signal)
+      )
         .then(async (social) => {
           const context = { ...data, manifest: target, scope };
           const targets = commentTarget
@@ -156,12 +176,14 @@ export function ZapButton({
         if (!controller.signal.aborted) setMessage(error.message);
       });
     return () => controller.abort();
-  }, [open, reference, target.id]);
+  }, [open, reference, target.id, recipient?.profile?.id, recipient?.lightning]);
   useEffect(() => {
     if (!open || paymentState !== 'paid') return;
     const timer = setTimeout(() => setOpen(false), 1200);
     return () => clearTimeout(timer);
   }, [open, paymentState]);
+  if (!open && !recipient?.lightning && !(cashuEnabled && recipient?.nutzap)) return null;
+  if (target.tags.some((t) => t[0] === 'zap')) return null;
   return (
     <Dialog
       open={open}
@@ -194,15 +216,24 @@ export function ZapButton({
       <DialogContent className="zap-dialog">
         <DialogHeader>
           <DialogTitle>
-            {commentTarget
-              ? 'A little lightning for the commenter'
-              : 'A little lightning for the creator'}
+            {contribution
+              ? 'A little lightning for this contribution'
+              : commentTarget
+                ? 'A little lightning for the commenter'
+                : 'A little lightning for the creator'}
           </DialogTitle>
           <DialogDescription>
-            Send sats directly to the author’s Lightning service. Choose and confirm payment in your
-            wallet.
+            {cashuEnabled ? 'Send Lightning sats or Cashu nutzaps' : 'Send Lightning sats'} to the
+            author. Review the amount and confirm with your chosen wallet.
           </DialogDescription>
         </DialogHeader>
+        {contribution && (
+          <div className="contribution-recipient">
+            <strong>{contribution.title}</strong>
+            <CreatorLink pubkey={target.pubkey} />
+            <small>This zap goes to this author for this specific contribution.</small>
+          </div>
+        )}
         {endpoint && !invoice && (
           <form
             className="community-form"
@@ -222,7 +253,7 @@ export function ZapButton({
                 const relays = relayHints.filter((r) => r.startsWith('wss:')).slice(0, 6);
                 if (!relays.length)
                   throw new Error(
-                    'Zaps need public relays. Local-only development does not send Lightning requests.',
+                    'No public payment relay is configured. Check your wallet relay settings.',
                   );
                 const template = {
                   kind: 9734,
@@ -232,7 +263,7 @@ export function ZapButton({
                     ['p', endpoint.pubkey],
                     ['e', target.id],
                     ['k', String(target.kind)],
-                    ...(!commentTarget && data.scope.address ? [['a', data.scope.address]] : []),
+                    ...(scope.address ? [['a', scope.address]] : []),
                     ['amount', String(msats)],
                     ['lnurl', endpoint.lnurl],
                     ['relays', ...relays],
@@ -246,7 +277,7 @@ export function ZapButton({
                 const context = {
                   ...data,
                   manifest: target,
-                  scope: commentTarget ? commentScope(commentTarget) : data.scope,
+                  scope,
                 };
                 const prepared = await requestZapInvoice(
                   context,
@@ -257,6 +288,7 @@ export function ZapButton({
                 if (!current.current.open || current.current.target !== targetKey) return;
                 const pending = zapPayments.remember({
                   target,
+                  ...(contribution ? { attribution: 'event' as const } : {}),
                   endpoint,
                   relays: relayHints.filter((relay) => new URL(relay).protocol === 'wss:'),
                   invoice: prepared,
@@ -379,6 +411,11 @@ export function ZapButton({
             <Button variant="outline" onClick={() => zapPayments.checkNow(scope.key)}>
               Check payment
             </Button>
+            {cashuEnabled && (
+              <Suspense fallback={<p>Loading wallet payment…</p>}>
+                <MintInvoicePayment invoice={invoice} scope={scope.key} />
+              </Suspense>
+            )}
             <LightningCode value={invoice.invoice} label="Zap invoice QR code" />
             <textarea aria-label="Lightning invoice" readOnly value={invoice.invoice} />
             <div className="social-actions">
@@ -435,8 +472,22 @@ export function ZapButton({
             </p>
           </div>
         )}
-        {!endpoint && !message && <p role="status">Looking up the creator’s Lightning address…</p>}
+        {recipient?.lightning && !endpoint && !message && (
+          <p role="status">Looking up the creator’s Lightning address…</p>
+        )}
         {message && <p role="status">{message}</p>}
+        {!cashuEnabled && !recipient?.lightning && (
+          <p>Enable your NIP-60 wallet in Account & settings to send this creator a nutzap.</p>
+        )}
+        {!invoice && cashuEnabled && (
+          <Suspense fallback={<p>Loading nutzap options…</p>}>
+            <NutzapOption
+              target={target}
+              info={recipient?.nutzap}
+              relayList={recipient?.relayList}
+            />
+          </Suspense>
+        )}
       </DialogContent>
     </Dialog>
   );

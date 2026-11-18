@@ -2,7 +2,12 @@ import { expect, test } from 'bun:test';
 import { expect as browserExpect, type Browser, type Page } from '@playwright/test';
 import { browserEngine } from '../../apps/cli/src/browser';
 import { PLAYER_ALLOW, PLAYER_SANDBOX } from '../../packages/runtime/src';
-import { gamepadPrelude } from '../../packages/runtime/src/prelude';
+import { nappletPrelude } from '../../packages/runtime/src/prelude';
+
+const shim = await Bun.file(
+  Bun.resolveSync('@napplet/shim/prelude.global', import.meta.dir),
+).text();
+const gamepadPrelude = (slots: number) => nappletPrelude(shim, undefined, slots);
 
 /** Features Chromium still grants an opaque player frame. Review additions before allowing them. */
 const REVIEWED_FEATURES = new Set([
@@ -42,7 +47,14 @@ async function mount(page: Page, body: string, allow = PLAYER_ALLOW) {
     ({ body, allow, sandbox }) => {
       const state = window as unknown as { received: unknown[] };
       state.received = [];
-      addEventListener('message', (event) => state.received.push(event.data));
+      addEventListener('message', (event) => {
+        if (event.data?.type !== 'napplet.hello') return;
+        const port = event.ports[0];
+        Object.assign(window, { fixturePort: port });
+        port.onmessage = ({ data }) => {
+          if (data.type.startsWith('gamepad.')) state.received.push(data);
+        };
+      });
       const frame = document.createElement('iframe');
       frame.sandbox.value = sandbox;
       frame.allow = allow;
@@ -56,18 +68,20 @@ async function mount(page: Page, body: string, allow = PLAYER_ALLOW) {
   await frame.waitForFunction(() => (window as unknown as { booted?: boolean }).booted === true);
   const post = (state: Record<string, unknown>) =>
     page.evaluate((state) => {
-      document
-        .querySelector('iframe')!
-        .contentWindow!.postMessage(
-          { type: 'gamepad.state', available: true, focused: true, ...state },
-          '*',
-        );
+      (window as unknown as { fixturePort: MessagePort }).fixturePort.postMessage({
+        type: 'gamepad.state',
+        available: true,
+        focused: true,
+        ...state,
+      });
     }, state);
   const received = () =>
     page.evaluate(() => (window as unknown as { received: unknown[] }).received);
   return { frame, post, received };
 }
-const pad = (id: string, timestamp: number) => ({
+const pad = (id: string, timestamp: number, index = 0) => ({
+  index,
+  connected: true,
   id,
   mapping: 'standard',
   timestamp,
@@ -79,9 +93,9 @@ test('the prelude shim serves the standard Gamepad API from shell snapshots', as
   await withFrame(async (page) => {
     const { frame, post, received } = await mount(
       page,
-      `<script>window.napplet = {};</script><script>${gamepadPrelude(4)}</script><script>
+      `<script>${gamepadPrelude(4)}</script><script>
         window.log = [];
-        window.booted = true;
+        window.napplet?.gamepad?.getGamepads(); window.booted = true;
       </script>`,
     );
     await browserExpect.poll(received).toEqual([{ type: 'gamepad.subscribe' }]);
@@ -146,7 +160,7 @@ test('the prelude shim serves the standard Gamepad API from shell snapshots', as
     });
     await browserExpect.poll(received).toEqual([{ type: 'gamepad.subscribe' }]);
 
-    await post({ pads: [null, pad('Pad one', 42)] });
+    await post({ pads: [null, pad('Pad one', 42, 1)] });
     await browserExpect.poll(() => frame.evaluate(() => navigator.getGamepads().length)).toBe(2);
     expect(
       await frame.evaluate(() => {
@@ -210,7 +224,10 @@ test('the prelude shim serves the standard Gamepad API from shell snapshots', as
 
 test('player frames are denied native Gamepad access and other unreviewed default features', async () => {
   await withFrame(async (page) => {
-    const { frame } = await mount(page, '<script>window.booted = true;</script>');
+    const { frame } = await mount(
+      page,
+      '<script>window.napplet?.gamepad?.getGamepads(); window.booted = true;</script>',
+    );
     const { allowed, native } = await frame.evaluate(() => {
       const policy = (document as unknown as { featurePolicy: { allowedFeatures(): string[] } })
         .featurePolicy;
@@ -232,8 +249,8 @@ test('the shim leaves the native API untouched when the host does not deny it', 
   await withFrame(async (page) => {
     const { frame, received } = await mount(
       page,
-      `<script>window.napplet = {};</script><script>${gamepadPrelude(4)}</script><script>
-        window.booted = true;
+      `<script>${gamepadPrelude(4)}</script><script>
+        window.napplet?.gamepad?.getGamepads(); window.booted = true;
       </script>`,
       'fullscreen',
     );
@@ -256,8 +273,8 @@ test('the standard binding works without a native Gamepad API', async () => {
         delete Navigator.prototype.getGamepads;
         delete window.Gamepad;
         delete window.GamepadButton;
-        window.napplet = {};
-      </script><script>${gamepadPrelude(0)}</script><script>window.booted = true;</script>`,
+
+      </script><script>${gamepadPrelude(0)}</script><script>window.napplet?.gamepad?.getGamepads(); window.booted = true;</script>`,
     );
     await browserExpect.poll(received).toEqual([{ type: 'gamepad.subscribe' }]);
     await post({ pads: [pad('Controller', 9)] });

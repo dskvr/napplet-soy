@@ -56,6 +56,13 @@
             ./package.json
             ./bun.lock
             ./apps/cli
+            # soyLI reuses Studio's inference settings UI and credential service.
+            ./apps/studio/connections-model.ts
+            ./apps/studio/connections-ui.tsx
+            ./apps/studio/connections.ts
+            ./apps/studio/inference-jobs.ts
+            ./apps/studio/model-catalogue.ts
+            ./apps/studio/model-picker-ui.tsx
             ./apps/cvm/package.json
             ./apps/web/package.json
             ./apps/web/src
@@ -72,7 +79,10 @@
             ./docs/BACKEND-CREATOR.md
             ./docs/DYNAMIC-BACKENDS-CREATOR.md
             ./docs/SHARED-DATA.md
+            ./docs/FIPS-CREATOR.md
+            ./docs/WEBMCP.md
             ./docs/OUTBOX.md
+            ./docs/examples/coordinated-audio.ts
           ]
         );
       };

@@ -6,6 +6,7 @@ import { from, lastValueFrom } from 'rxjs';
 import type { EventTemplate, NostrEvent } from 'nostr-tools';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { verifiedEvent, type SignedEvent } from '../../protocol/src';
+import { studioSigningKinds } from './studio-channel';
 
 export type Network = 'public' | 'local';
 export class AccountError extends Error {
@@ -17,10 +18,36 @@ export class AccountError extends Error {
   }
 }
 export const publishingKinds = [5, 30617, 30618, 24242, 32267, 35129, 15129, 5129];
+// Shell wallet only; these permissions are never granted to a napplet iframe.
+export const walletSigningKinds = [17375, 7375, 7376, 10019, 9321, 22242];
 // Viewer-authorized COMMON/LISTS, scoped public app data, Blossom auth and shell actions.
 export const websiteKinds = [
-  0, 1, 3, 5, 7, 1111, 1984, 9734, 10000, 10001, 10002, 10003, 10006, 10007, 10015, 10063, 24242,
-  27235, 30000, 30002, 30003, 30015, 30078, 35129, 15129, 35858,
+  0,
+  1,
+  3,
+  5,
+  7,
+  1111,
+  1984,
+  9734,
+  10000,
+  10001,
+  10002,
+  10003,
+  10006,
+  10007,
+  10015,
+  10063,
+  27235,
+  30000,
+  30002,
+  30003,
+  30015,
+  30078,
+  35858,
+  // Explicit Studio publication/contribution consent; not an iframe permission.
+  ...studioSigningKinds,
+  ...walletSigningKinds,
 ];
 export const defaultSignerRelays = ['wss://relay.napplet.soy'];
 // A client connection budget, not a NIP-46 protocol limit. Keep saved sessions
@@ -80,6 +107,10 @@ export type CreatorSigner = {
   getPublicKey(): Promise<string>;
   signEvent(event: EventTemplate): Promise<SignedEvent>;
   close(): Promise<void>;
+  nip44?: {
+    encrypt(pubkey: string, plaintext: string): Promise<string>;
+    decrypt(pubkey: string, ciphertext: string): Promise<string>;
+  };
 };
 export function checkPubkey(pubkey: string, network: Network) {
   if (!/^[a-f0-9]{64}$/.test(pubkey))
@@ -152,7 +183,13 @@ class Session extends NostrConnectSigner {
   private ended = false;
   constructor(options: ConstructorParameters<typeof NostrConnectSigner>[0]) {
     super(options);
-    this.log.enabled = false;
+    // v7 loggers are read-only; swap in a silent one so RPC params never reach a sink.
+    const silent = Object.assign(() => {}, {
+      namespace: this.log.namespace,
+      enabled: false,
+      extend: () => silent,
+    });
+    this.log = silent;
   }
   /** SDK 6.2.2 lacks the fourth NIP-46 connect parameter. Keep its encryption,
    * response dispatch, authorization challenges and close/cancellation registry. */
@@ -352,6 +389,11 @@ async function openSession(
       const name =
         typeof options.name === 'function' ? options.name(remote.clientPubkey) : options.name;
       const metadata = name ? { name, url: options.url ?? 'https://napplet.soy' } : undefined;
+      const permissions = [
+        'get_public_key',
+        ...NostrConnectSigner.buildSigningPermissions(kinds),
+        ...(kinds.includes(17375) ? ['nip44_encrypt', 'nip44_decrypt'] : []),
+      ];
       if (credential.type === 'pairing') {
         const pairing = options as PairingOptions;
         await bounded(async () => {
@@ -362,18 +404,14 @@ async function openSession(
             remote!.getNostrConnectURI({
               name: name ?? 'Napplet Space',
               url: pairing.url ?? 'https://napplet.soy',
-              permissions: ['get_public_key', ...NostrConnectSigner.buildSigningPermissions(kinds)],
+              permissions,
             }),
           );
           await waiting;
         });
       } else {
         const ack = await bounded(() =>
-          remote!.connectNamed(
-            credential.secret,
-            ['get_public_key', ...NostrConnectSigner.buildSigningPermissions(kinds)],
-            metadata,
-          ),
+          remote!.connectNamed(credential.secret, permissions, metadata),
         );
         if (ack !== 'ack' && ack !== credential.secret)
           throw new AccountError(
@@ -391,6 +429,10 @@ async function openSession(
         'The signer now represents a different creator. Connect that account explicitly.',
       );
     const signer: CreatorSigner = {
+      nip44: {
+        encrypt: (peer, text) => bounded(() => (remote ?? local).nip44!.encrypt(peer, text)),
+        decrypt: (peer, text) => bounded(() => (remote ?? local).nip44!.decrypt(peer, text)),
+      },
       getPublicKey: async () => {
         if (closed) throw new AccountError('SIGNER_CLOSED', 'Signer session closed.');
         return pubkey;

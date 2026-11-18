@@ -63,6 +63,18 @@ test('a package-manager build refuses soyli update and points doctor at that pac
       ]);
       return { code, stdout, stderr };
     };
+    const scaffold = await run(['new', 'example', '--identity', 'later', '--no-install', '--json']);
+    expect(scaffold.code, scaffold.stdout + scaffold.stderr).toBe(0);
+    expect(
+      await Bun.file(join(directory, 'example/docs/examples/coordinated-audio.ts')).text(),
+    ).toBe(await Bun.file(join(root, 'docs/examples/coordinated-audio.ts')).text());
+    for (const [generated, source] of [
+      ['docs/napplet-fips.md', 'docs/FIPS-CREATOR.md'],
+      ['docs/examples/fips-resource-client.ts', 'packages/resource-client/src/index.ts'],
+    ] as const)
+      expect(await Bun.file(join(directory, 'example', generated)).text()).toBe(
+        await Bun.file(join(root, source)).text(),
+      );
     const refused = await run(['update', '--json']);
     expect(refused.code).toBe(1);
     const { error } = JSON.parse(refused.stdout);

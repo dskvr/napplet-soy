@@ -137,6 +137,26 @@ make each of those kinds part of Soy's own application protocol.
 and kind `3063` software assets. Calling a legacy `32267` companion a
 “Zapstore release” obscures that distinction.
 
+### Shell wallet — implemented locally, not deployed
+
+The account wallet reuses NIP-60 kinds `17375`, `7375`, `7376`, NIP-61 kinds
+`10019`, `9321`, NIP-09 deletion and NIP-42 authentication (`22242`). Wallet data
+is self-encrypted with NIP-44; receiving information and nutzaps are public.
+The existing shell identity authorizes each spend. Napplets cannot access these
+keys, proofs or signing permissions.
+
+Recipient capability discovery checks kind `0` Lightning destinations and kind
+`10019` nutzap receiving information before exposing a Zap action. Kind `10002`
+write relays extend discovery; newer withdrawals supersede older capabilities.
+Wallet-only public relay reads and writes are allowed in local development, without
+relaxing ordinary publication or napplet-frame policy.
+
+The [wallet contract](docs/WALLET.md) records event tags, compatible extensions,
+recovery guarantees, mint trust and current limits. Addressable nutzaps include
+the stable `a` coordinate as well as `e`. Typed history adds encrypted
+`mint`/`fee`/`type` tags. There is no new kind or companion event. Contributor split
+payments remain unimplemented; existing Lightning receipt totals exclude nutzaps.
+
 ### Authorization and transport events
 
 These must not be confused with public napplet releases or feed content.
@@ -617,6 +637,27 @@ persistent world rules. The current CVM client does not enable open streams or
 oversized-transfer mode. Choosing a future transport does not itself settle
 schema, authorization, ordering or conflict semantics. See
 [ContextVM and realtime contracts](docs/CONTEXTVM.md).
+
+### Hosted Studio control (implementation; rollout pending)
+
+Studio reuses NIP-98 kind `27235` to authorize an ephemeral ContextVM client key for
+the signed-in account. The signature binds the canonical HTTPS session endpoint,
+POST method and exact body hash. It grants private workspace access, never authority
+to sign napplet, repository or proposal events. Those retain exact shell-account
+signing and the existing publication review.
+
+Encrypted ContextVM SDK 0.13.16/MCP carries the private `soy_studio_call` contract.
+It selects an owner from the verified transport key and validates commands with the
+same dispatcher as local Studio. HTTPS bearer-authenticated transfers carry large
+private source/build/media payloads; they are not public Blossom objects. Mutation
+receipts prevent an ambiguous reconnect from silently running the action twice.
+No new Nostr kind, NAP domain, GRASP wrapper or metadata companion is introduced.
+The selected NIP-5D pin and public creator interoperability are unchanged.
+
+Browser builds compile in the creator's tab; isolated server jobs handle inference,
+server builds and capture. Private Git storage remains on the host. Public remixes,
+proposals and source publication follow §5. See [the complete hosting contract,
+limits and deployment status](docs/STUDIO-HOSTING.md).
 
 ## 8. Decisions and open questions
 

@@ -3,9 +3,922 @@
 Deployment is operator-run. Routine changes are verified and committed locally;
 do not deploy or upload releases unless the user explicitly requests deployment.
 
-Updated 2026-10-15. **[napplet.soy](https://napplet.soy) is live**, using the temporary legacy CPU profile on the existing Namecheap VPS. Caddy issued valid Let's Encrypt certificates for the website, www, Blossom and Git; the other site remains available. The deploy script includes Caddy and PM2. Local production builds exercise the same web, relay, Blossom and GRASP implementations and PM2 definitions. Dedicated hosts use the pinned local Caddy version; shared hosts retain their existing Caddy. See the deployment record below for verification and the compatibility workaround.
+Updated 2026-11-11. **[napplet.soy](https://napplet.soy) is live**, using the temporary legacy CPU profile on the existing Namecheap VPS. Caddy issued valid Let's Encrypt certificates for the website, www, Blossom and Git; the other site remains available. The deploy script includes Caddy and PM2. Local production builds exercise the same web, relay, Blossom and GRASP implementations and PM2 definitions. Dedicated hosts use the pinned local Caddy version; shared hosts retain their existing Caddy. See the deployment record below for verification and the compatibility workaround.
 
-Latest verified website release: **`20261014193031446-12904`**, source
+### Most recent application deployment — realtime multiplayer, 2026-11-11
+
+Website release **`20261111154205110-71855`** runs source
+`aa07c89a64a759203529bfbabe6f91ccc26c3a0a`
+([PR #64](https://github.com/soytec/napplet-soy/pull/64)). The compatible runtime
+([PR #63](https://github.com/soytec/napplet-soy/pull/63), `f206df6`) was deployed
+first as `20261111151052893-13721`, retaining the 0.33.0 installer until the
+[soyLI 0.34.0 release and public updater checks](CLI-RELEASES.md) passed.
+The final public installer matches the official release asset byte for byte:
+`6297676daf722b815a31c3a54e28c68418fad01b6c6beb1cb47b1e5bc33fb7e1` (SHA-256).
+
+The shared runtime adds the proposed WebRTC delivery controls and authenticated
+binary support while retaining reliable JSON. Queue semantics, exact limits,
+proposal pins and the local signaling extension are documented in
+[WEBRTC-REALTIME.md](WEBRTC-REALTIME.md). This does not claim standardized
+cross-shell signaling or measured Internet multiplayer latency.
+
+The final rollout passed **1,042 tests / 8,110 assertions** locally and
+**1,042 tests / 8,109 assertions** on the legacy VPS, plus relay, Blossom and
+GRASP service checks. All runtime/release PR checks and four native release
+jobs passed. The pre-push full Nix gate force-rebuilt dependencies and soyLI and
+passed x86_64 Linux/KVM regressions; AArch64 Nix acceptance was not run.
+The final SSH output stream was interrupted during compilation, but the remote
+deployment completed and activated the release. A fresh connection verified the
+active release, public health, successful page responses and exact installer;
+the worker guard subsequently verified all 764 deployed source hashes. The
+finished deployment was not rerun.
+
+The matching additive Studio worker is
+`sha256:f853d9eae35fdcb7ede0cb3de65cc4386cfb9a863ebf921103e096d55b56c327`.
+All fourteen isolated acceptance checks passed: server/browser build paths,
+truncation, timeout/failure/cancellation recovery, desktop/portrait capture,
+thread/crash recovery and exact creator guidance. Four activation simulations
+covered success, rollback, busy jobs and configuration races. Activation required
+idle creator jobs, preserved a protected configuration backup and changed only
+the image; ownership/mode remained `root:napplet-studio`, `0640`. The live
+service-user scaffold emitted all eight expected guide/helper files exactly,
+created no account and installed no dependencies. Studio reported `ready`,
+active/running, with zero automatic restarts.
+
+Public HTTPS health identifies the exact release and reports `ok`; `/`, `/manage`,
+`/gg` and `/studio/create` respond successfully. External relay errors in the
+catalog remain separate from readiness. Machines v8 was updated through released
+soyLI under its existing identity; its signed release, public artifact/source/cover
+hashes, anonymous Git revision and production menu/local AI race were verified.
+See [publication evidence](WEBRTC-REALTIME.md#machines-publication--2026-11-11).
+No public multiplayer rooms were used for test traffic, and no Atlas provider
+or private CVM was restarted. Local receipts are under
+`.local/webrtc-rollout/`, with accepted worker evidence in
+`.local/webrtc-release/.local/webrtc-worker/worker/`.
+
+### Previous application deployment — FIPS dashboard, 2026-11-11
+
+Website release **`20261111071624314-86790`** runs source
+`808044555443d6e2dede98d9494f985e0957cb3b`
+([PR #61](https://github.com/soytec/napplet-soy/pull/61)). The merged tree matches
+verified candidate `4824fcf262d7d66e3830db8e31a7715669b0904d`. Manage now includes
+the [FIPS dashboard](FIPS-RESOURCES.md#shell-dashboard--11-november-2026), and the
+account popover shows connection status with an Inspect dialog that retains the
+running player. Diagnostics and controls remain host-only; the napplet wire API,
+resource approvals and opaque sandbox are unchanged.
+
+The normal rollout passed **1,034 tests / 8,049 assertions** locally and
+**1,034 tests / 8,048 assertions** on the legacy VPS. Both environments passed
+relay, Blossom and GRASP service checks; the production build and candidate
+health checks passed. All PR checks were green before merge, including four
+native packaging targets, Nix and Studio/browser regressions. The independent
+pre-push Nix gate realized and force-rebuilt dependencies and soyLI, then passed
+x86_64 Linux/KVM regressions without hash changes. AArch64 Nix checks were not run.
+
+The matching additive Studio worker is
+`sha256:f887c646f65838175e359dee3eb622962e57067d2e15de4b85e2c89d5fbe01e9`.
+All thirteen isolated acceptance checks passed, covering both build paths,
+timeout/truncation/failure/cancellation recovery, capture, crash/thread recovery
+and exact FIPS scaffolding. Four activation simulations covered success,
+rollback, busy jobs and configuration races. Activation verified 759 deployed
+source hashes, required idle creator jobs, retained a protected configuration
+backup and changed only the image. Studio then reported `ready`.
+The live service-user scaffold check passed with exact creator-file hashes and
+zero automatic service restarts. Private server settings and the egress script retained
+their pre-rollout hashes; Studio configuration ownership and mode remained
+`root:napplet-studio`, `0640`.
+
+Public HTTPS health identifies the exact release and reports `ok`; `/manage`,
+`/gg` and `/studio/create` respond successfully. Fresh production browser checks
+passed anonymous dashboard and account status, 390px light/dark layouts, Gamegrid
+inspection, navigation, Escape/focus restoration and the Inspect dialog above a
+fullscreen player with its iframe retained. The fullscreen check supplied the
+matching bundled Soft orbit artifact through a browser-only fixture override;
+no account, provider or payment operations were performed. These are Chromium
+checks, not physical mobile-device acceptance. The public installer remains
+byte-identical to soyLI 0.33.0 (SHA-256
+`7105be595067c17fe670ff870ac9c7421db30dac0fd8d8e0b3ba2ae305ad37bb`). No standalone
+CLI release, napplet republication or Atlas provider restart was performed.
+Local rollout receipts are under `.local/fips-dashboard-release/` in the isolated
+FIPS dashboard worktree, including `deploy.log`, `ci-green.json`,
+`public-verification.json` and the `worker/` acceptance/activation records.
+
+### Previous application deployment — FIPS resources and soyLI 0.33.0, 2026-11-10
+
+Website release **`20261110155348389-22866`** runs source
+`ed8a0d5d4e8593ddeaffa4e1f978fbd96fd1ddac`
+([PR #58](https://github.com/soytec/napplet-soy/pull/58)), whose tree matches
+verified candidate `3d6aa8f9486dc6f5140ebca9ee024433ddd33a84`. The shared website,
+local preview and hosted tooling add experimental `soy.fips/1` resource sessions
+with explicit root/provider approval, verified selective reads and separate
+permission for Atlas operations. The opaque sandbox remains intact. This is not
+an accepted NAP or an independent-shell interoperability claim; see
+[scope, pins and acceptance limits](FIPS-RESOURCES.md).
+
+The normal rollout activated the 0.33.0 installer after public asset, fresh-install
+and 0.32.1 → 0.33.0 updater verification. The live `/install.sh` matches the official
+release asset byte for byte:
+`7105be595067c17fe670ff870ac9c7421db30dac0fd8d8e0b3ba2ae305ad37bb` (SHA-256).
+Public HTTPS health reports the exact release and `ok`; the homepage, `/gg` and
+`/studio/create` return successfully. A final health recheck confirmed the release
+remained stable. The public catalog index still named the previous release at
+verification, with `stale: false`.
+
+The additive Studio worker image is
+`sha256:053c11a90dffd023889ab79ccdff7cc57820cc820b9bad4f01317d541145fa92`.
+Activation verified all 756 deployed source hashes, preserved a protected
+configuration backup and changed only the configured image; ownership/mode remain
+`0:985` / `0640`.
+Isolated acceptance passed both build paths, truncated turns, timeout and failure
+recovery, cancellation/reuse, desktop/portrait capture, thread pressure and runtime
+crash recovery. The live service reports `ready`, is active/running with zero
+restarts and uses soyLI 0.33.0. A fresh disposable project scaffolded as the service
+user matched all seven expected creator-file hashes, including the exact FIPS
+guide and SDK. Existing dependency profiles and the temporary legacy CPU runtime
+remain unchanged. The Atlas provider required no restart.
+
+The application passed **1,025 tests / 7,967 assertions** locally and
+**1,025 tests / 7,966 assertions** on the VPS. Both environments passed five relay,
+18 Blossom and nine GRASP tests; the VPS additionally passed three backend-isolation
+tests with 20 assertions and the production build. Exact-candidate Nix dependency
+realization, forced dependency/soyLI rebuilds and x86_64 Linux KVM regressions
+passed after recording the resource-client workspace in both the lockfile and Nix
+inputs. AArch64 Nix acceptance was not run. The [release record](CLI-RELEASES.md)
+links the green native, Nix and Studio CI and public binary checks.
+
+The [Atlas consumer](FIPS-RESOURCES.md#public-atlas-consumer-release--10-november-2026)
+is published and indexed. Its public build, cover, MIT source archive and anonymous
+Git checkout match the approved inputs. The consumer-only export excludes private
+host code and is not a stock Studio browser-build profile. Public asset, updater,
+scaffold and final HTTPS receipts are under `.local/fips-release/public-verification/`;
+worker acceptance and activation receipts are under `.local/fips-release/worker/`.
+The complete normal rollout log is `.local/fips-release/deploy.log`.
+
+### Previous application deployment — controller guidance and soyLI 0.32.1, 2026-11-09
+
+Website release **`20261109150341834-40351`** runs the published soyLI 0.32.1 tag
+source `d66d52a377229b2631596070dd6843a21764149a`
+([PR #56](https://github.com/soytec/napplet-soy/pull/56)), whose tree matches the
+verified candidate `0c43c0d1a4b00d7b26c062918c83b9c7afaee91e`. Controller support
+remains optional; when chosen, the creator guidance now covers the whole napplet,
+including menus, settings, results and back navigation. See the
+[release scope and public binary verification](CLI-RELEASES.md).
+
+The normal application rollout activated the 0.32.1 installer after its public
+assets, fresh install and 0.32.0 → 0.32.1 update passed verification. The live
+`/install.sh` matches the official release asset byte for byte:
+`81a54be71b345c94eeaa8eb20d9490685fa76baa7355b95c76983742180c3c26` (SHA-256).
+Public HTTPS health reports the exact release and `ok`; the homepage, `/gg`,
+`/manage` and `/studio/create` return successfully. Public backend discovery
+exposes the expected version, public key and relay only.
+
+The additive Studio worker image is
+`sha256:06267e47b9b43c5c3f4ac231789f510fd9ea1afcbfe623fb740b9f4176c2a949`.
+Activation verified 616 source hashes, preserved a protected configuration backup
+and changed only the configured image; ownership/mode remain `0:985` / `0640`.
+Offline acceptance passed both build paths, capture, failure/cancellation recovery,
+thread pressure and the embedded guide/version checks. The service reports `ready`, is
+active/running with zero restarts and uses soyLI 0.32.1. A fresh, disposable
+project scaffolded as the service user matched all five expected creator-file
+hashes. Existing dependency profiles and the temporary legacy CPU runtime remain
+unchanged.
+
+The application passed **1,010 tests / 7,851 assertions** locally and
+**1,010 tests / 7,850 assertions** on the VPS, plus five relay, 18 Blossom, nine
+GRASP and three backend-isolation tests and the production build. Exact-candidate
+Nix realization, forced package rebuilds and x86_64 Linux KVM regressions passed;
+the [release record](CLI-RELEASES.md) links the green native, Nix and Studio CI.
+Public asset and upgrade receipts are in
+`.local/soyli-0.32.1-public-verification/`; final HTTPS receipts are in
+`.local/soyli-0-32-1-rollout/.local/release-verification/public-rollout.json`.
+Worker acceptance and activation receipts are in
+`.local/soyli-0-32-1/.local/controller-guidance-worker/`.
+
+### Previous application deployment — Gamegrid and soyLI 0.32.0, 2026-11-09
+
+Website release **`20261109123450241-52445`** runs source
+`f343b2a0f135a2ae88b0187fcadf29bb93909c42`, whose tree matches merged
+`cd99c0120caea8c9f5db3868c5aad3b48fc2ffe2`
+([PR #53](https://github.com/soytec/napplet-soy/pull/53)). It adds search-only
+results and activates the verified 0.32.0 installer through the normal deployment.
+
+The initial reader release **`20261109115501705-88663`** ran source
+`fb2abb98ad62a9308f8df4e38b7956575497d4d6`, combining
+[Gamegrid and media compatibility](https://github.com/soytec/napplet-soy/pull/50)
+with the [portable test fixture](https://github.com/soytec/napplet-soy/pull/52).
+The shell accepts the selected NIP-5D presentation and HTTPS source-archive fields
+while retaining legacy reads. These readers and the hosted worker were activated
+before tagging soyLI 0.32.0. The website initially retained the 0.31.4 installer.
+
+[soyLI 0.32.0](CLI-RELEASES.md) was then published from
+`c8e9a7b5aaa80f590bd3e5c5453684fd1a56ba79`. All 11 public assets, their checksums
+and GitHub digests, and all four archive metadata records passed verification.
+An isolated macOS ARM64 fresh install and a real 0.31.4 → 0.32.0 update passed;
+the prior release, account/project markers and legacy command were preserved.
+Controller-journey guidance was not included in this application/worker rollout
+or the immutable 0.32.0 binaries. It subsequently shipped in
+[soyLI 0.32.1](CLI-RELEASES.md).
+
+The live `/install.sh`, deployed source copy and built copy all match the official
+0.32.0 release asset byte for byte:
+`bbd719888be26c6a74e22497aa399bcb9da746737e3edab4061a8f4985b80ecb` (SHA-256).
+No separate installer-only activation was used.
+
+[Gamegrid](GAMEGRID.md) is available at [/gg](https://napplet.soy/gg). Its scrolling
+Discover view contains Featured, Most liked, Most zapped, Most commented and New
+sections. A public-browser check loaded all five sections and 32 tiles, played
+three visible previews, unloaded offscreen videos and found no horizontal
+overflow. The menu opened successfully. On the final release, searching for
+**Freeze Frame** showed one Search results section and one matching game, without
+Featured/ranking sections or horizontal overflow. Automated controller coverage
+exercises shell navigation and focus handoff; physical-controller and Steam Deck
+acceptance remain unverified, so Gamegrid remains a beta.
+
+The additive Studio worker image is
+`sha256:40e262a8953bbf35a5d92d0a424242a453599519574c0d69586a7f2c624b7137`.
+It embeds the compatible shared tools from `ac04341`, whose runtime files match
+the initial reader source. Isolated acceptance passed server and browser-build
+agent paths, truncated turns, timeout and crash recovery, cancellation, subsequent
+reuse, thread pressure, and desktop/portrait capture. Activation changed only the
+configured image; configuration ownership and mode remained `0:985` / `0640`.
+The search rollout retained this image. Studio is active/running with zero restarts
+and reports `ready` with its existing `legacy-x64` profile. Public and loopback
+health identify the final website release, and the current symlink matches it.
+External relay query errors remain visible in catalog health.
+
+Each application rollout passed **1,010 tests / 7,851 assertions** locally and
+**1,010 tests / 7,850 assertions** on the VPS. Local and remote checks also passed
+five relay, 18 Blossom and nine GRASP tests; the VPS passed three backend isolation
+checks and the production build. Exact-candidate Nix realization, forced
+`nodeModules`/`soyli` rebuilds and x86_64 Linux flake/VM checks passed. The initial
+reader source passed
+[Nix CI](https://github.com/soytec/napplet-soy/actions/runs/42610985965),
+[all four native platform checks](https://github.com/soytec/napplet-soy/actions/runs/42610985968)
+and [Studio integration CI](https://github.com/soytec/napplet-soy/actions/runs/42610985979).
+The search follow-up also passed
+[Nix package/VM CI](https://github.com/soytec/napplet-soy/actions/runs/42616608469)
+and [Studio integration CI](https://github.com/soytec/napplet-soy/actions/runs/42616608164).
+
+The first deployment stopped before activation because the legacy host's image
+library could not encode a GIF test fixture. The correction uses fixed valid GIF
+bytes and preserves the decoder assertion. A later local attempt stopped on a
+temporary-file error; the complete local and remote suites passed on the final
+attempt. No failed test was bypassed. Activation retained a protected
+configuration backup. Local worker evidence is in
+`.local/gamegrid/.local/gamegrid-release-worker/`; public release, upgrade and live
+installer receipts are in `.local/soyli-0.32.0-public-verification/`. The final
+search screenshot is `output/playwright/search-results-production.png`.
+
+### Previous application deployment — Standalone HTML remixes, 2026-10-30
+
+Website release **`20261030150744472-18351`** runs source
+`6b5abd746fc76eb2f9777ef980bf357d63548ef0` from the separate
+`codex/fix-remix-initialization` branch ([PR #44](https://github.com/soytec/napplet-soy/pull/44)).
+Deployment was authorized independently of merging the PR. Non-Git imports now
+receive an initial checkpoint; older drafts without a baseline recover on retry.
+Dependency-free HTML remixes use their verified executable as editable source,
+without requiring a starter compiler or lockfile. Shared sandbox checks remain
+mandatory; absent upstream conformance tests are explicitly skipped.
+
+The additive worker image is
+`sha256:8b9c3f930b2810bd6665bb9700c2a0063bc82db29731bd47475e925334b3f1bc`.
+The actual signed Pokédex artifact passed isolated VPS setup, build and sandbox
+startup with its bytes unchanged. A dependency-bearing missing-lock fixture was
+refused with actionable diagnostics. No inference calls or user draft edits were
+used for acceptance. Downloadable soyLI remains **0.31.4**; this rollout updates
+the website and its bundled worker tools.
+
+Local checks passed **926 tests / 7,294 assertions**; the VPS passed
+**926 tests / 7,293 assertions**, five relay, 18 Blossom and nine GRASP tests.
+The production build scope completed successfully. Nix realization, forced
+`nodeModules`/`soyli` rebuilds and x86_64 Linux flake/VM checks passed. The first
+Studio CI run timed out in a browser capture test; the same capture suite passed
+locally. Current PR check status is tracked on GitHub rather than inferred from
+the successful rollout.
+
+The SSH console disconnected during the rollout, but independent inspection
+confirmed successful activation: source hashes and worker digest match, all five
+PM2 processes are online without restarts, and Studio, CVM, TURN, Caddy and the
+backup timer are active. Public HTTPS health, homepage, Manage, Studio and Pokédex
+routes passed. All 14 existing Git workspaces, bindings and revision pins were
+preserved. One draft recorded a failed retry on the previous release during the
+build window; no workspace changes occurred. Unrelated private configuration and
+Studio egress rules are unchanged; Studio configuration remains service-readable
+as `root:napplet-studio` / `0640`.
+
+Application release `20261028073825802-68374`, its worker image and a protected
+Studio configuration backup remain available for rollback. Local evidence is in
+`.local/remix-init-fix/`.
+
+### Previous application deployment — NIP-5D compliance corrections, 2026-10-28
+
+Website release **`20261028073825802-68374`** runs the tested tree `6682423`,
+identical to merged source `0ed9f119059b37c7c05477b2a810186e3c4344da`
+([PR #43](https://github.com/soytec/napplet-soy/pull/43)). The compatible shared
+shell and Studio worker were deployed before releasing [soyLI 0.31.4](CLI-RELEASES.md).
+Domain calls no longer depend on SHELL readiness; napplet-owned MEDIA sessions and
+explicit check-coverage reporting are shared by hosted and local previews.
+No iframe network permission, protocol pin or publisher-specific exception was added.
+
+The additive worker image is
+`sha256:f05391c3277f190ae85a78e38060fb56d18f17381b611abf1ef26bd0ca86cd31`.
+It preserves the legacy CPU runtime and both installed dependency profiles.
+Disposable VPS tests covered server and browser-build agent paths, tool repair,
+truncated turns, timeout/crash recovery, cancellation, subsequent reuse, thread
+pressure and desktop/portrait capture. No paid inference or public test events
+were used for worker acceptance.
+
+Local source checks passed **924 tests / 7,268 assertions**; the VPS passed
+**924 tests / 7,270 assertions**, five relay, 18 Blossom, nine GRASP and three
+backend isolation checks, followed by the production build. Exact-candidate Nix
+package, forced-rebuild and Linux VM checks passed in CI; local Nix was unavailable.
+Independent Paja acceptance passed 28 browser cases; its scope and remaining
+capability differences are recorded in the [repair evidence](audits/2026-10-28/repairs/README.md).
+
+The first activation rolled back after the private rollout helper replaced the
+Studio configuration without preserving the service user's read permission.
+Service access was restored. The corrected retry verified all 1,057 archived source
+files, preserved `root:napplet-studio` / `0640`, and checked service readability before
+activation. It reused the already successful build/check results; no failed test
+was bypassed. All 11 existing drafts, workspace Git state and bindings were preserved,
+as were unrelated private configuration and Studio egress rules.
+
+Public HTTPS routes, five PM2 services, Studio, CVM, TURN and Caddy passed post-deploy
+checks. The served 0.31.4 installer matches the verified release asset. External relay
+failures remain visible in catalog health; healthy-relay delivery is verified separately.
+Previous application release `20261025092259843-68824` and worker image `6000d26b…`
+remain available for rollback. Physical devices, reboot recovery and long-term uptime
+are outside this rollout's evidence.
+
+### Previous application deployment — Contribution graph, 2026-10-25
+
+Website release **`20261025092259843-68824`** runs source
+`6b16f33604f499954d569a82180c15345103da6f`, the squash merge of
+[PR #42](https://github.com/soytec/napplet-soy/pull/42). Napplet listings now show
+the [contribution graph](COLLABORATION.md#contribution-graph): release milestones,
+proposal branches, contributor profiles and signed merge reports. Each release or
+proposal can be tipped individually through the existing Lightning/Cashu dialog.
+
+[Nix package/rebuild/VM checks](https://github.com/soytec/napplet-soy/actions/runs/40180023322),
+[application and four native platform checks](https://github.com/soytec/napplet-soy/actions/runs/40180023338),
+and [Studio integration checks](https://github.com/soytec/napplet-soy/actions/runs/40180023355)
+passed on the exact PR head. The merged tree is identical. On the VPS, typecheck,
+916 application tests, 5 relay, 18 Blossom, 9 GRASP and 3 backend isolation checks
+passed, followed by the production build and candidate activation checks.
+
+A fresh anonymous browser on public HTTPS loaded Funclet's four retained releases,
+the merged proposal and both contributor profiles. The all-releases toggle and
+proposal selection passed. The proposal zap dialog identifies hzrd149; the first
+retained release identifies Schlaus Kwab. No invoice, payment or signed event was
+created. Local fixture checks also cover dark theme and mobile overflow. External
+relay errors remain visible; healthy relays supplied the live proposal/profile data.
+
+Public health and the completed catalog scan identify the new release. The homepage,
+Manage, Studio, Blossom and the other hosted site respond successfully over HTTPS.
+Deployed source hashes match, all five application processes are online with zero
+restarts, and Studio, CVM, TURN and Caddy are active. All 11 existing draft records
+and Git workspaces, private configuration and Studio egress policy are unchanged.
+No active or queued creator jobs were present at activation.
+
+soyLI remains **0.31.3** and the Studio worker remains
+`sha256:6000d26beb55030bffb7f70fdfcbc265b13e04ae46187f06e698348974250eed`.
+Application release `20261024054808804-1` is retained for rollback. Local verification
+evidence is in `.local/contribution-graph/`; the live graph screenshot is in
+`output/playwright/contributions-live.png`.
+
+### Previous application deployment — Update publishing, 2026-10-24
+
+Website release **`20261024054808804-1`** runs source
+`408ee86d3e7d858961e8d1a48e83984be64e126f`. [PR #41](https://github.com/soytec/napplet-soy/pull/41)
+merged as `2928f3e`; the follow-up isolates an ordinary test from browser installation.
+Existing and merged publications now open as **Publish update** with their prior
+metadata and media. Creators can retain reviewed covers/clips, edit metadata or
+re-record. Capture uses a fixed viewport instead of waiting for iframe stability;
+errors preserve their browser cause. No user napplet was republished during rollout.
+
+[soyLI 0.31.3](https://github.com/soytec/napplet-soy/releases/tag/soyli-v0.31.3)
+was published and verified before activation. Its optional reviewed-media field
+binds unchanged clip bytes to the updated executable, preserving the original
+recorded-build hash. Four native release builds, Nix package/VM checks and Studio
+integration CI passed. See the [CLI release evidence](CLI-RELEASES.md).
+The [test-only follow-up](https://github.com/soytec/napplet-soy/actions/runs/40067658768)
+also passed Studio CI. On the VPS, all 908 application tests, 5 relay, 18 Blossom,
+9 GRASP and 3 backend isolation checks passed, followed by the production build.
+
+The additive worker image is
+`sha256:6000d26beb55030bffb7f70fdfcbc265b13e04ae46187f06e698348974250eed`.
+It preserves both installed dependency profiles and the legacy CPU runtime.
+Disposable copies of the affected merged Funclet draft passed both retained-media
+and fresh-screenshot checks; changed clip bytes were rejected. Scripted server and
+browser-build repair, desktop/portrait capture, timeout/crash recovery, cancellation
+and subsequent job reuse passed without paid inference or public events.
+
+An initial candidate stopped before activation because a new ordinary test attempted
+to download Chromium on the controller. The correction verifies saved media bytes in
+that test; real browser startup and stale-media regressions remain in the browser
+integration suite. The empty-browser-cache VPS regression passed in 2.4 seconds.
+No runtime timeout was relaxed, and the published CLI runtime is unchanged.
+
+Public HTTPS routes and the completed catalog scan identify the new release. The
+served installer matches the verified 0.31.3 release asset. External relay query
+timeouts remain visible; they did not prevent completion through healthy relays.
+
+Deployed source hashes match. All five application processes have zero restarts;
+Studio, CVM, TURN and Caddy are active. All 11 existing draft records and Git
+workspaces are preserved. Unrelated private configuration and Studio egress policy
+are unchanged. No active creator jobs were present at activation.
+
+Rollback retains application release `20261023204030207-1`, worker image
+`sha256:1c61376651dfdb8dd0eeffe4ae7ffc501ca83a214d7722b38418a7d2cb633128`
+and a protected copy of the previous Studio configuration. Local evidence is in
+`.local/update-publication/` and `.local/release-0.31.3/`.
+
+### Previous application deployment — Proposal reviews, 2026-10-23
+
+Verified website release: **`20261023204030207-1`**, application source
+`9618fbf7664a99728eda6c2de68e07d7ea99a7fd`. [PR #40](https://github.com/soytec/napplet-soy/pull/40)
+merged as `978f7c6`; `9618fbf` corrects the operator-image test's expectations on
+the legacy runtime without relaxing its pinned compiler requirement.
+
+Proposal cards now show the contributor, and private Studio merge reviews show
+their purpose, author and source proposal. The hosted worker accepts exact,
+operator-installed dependency profiles. The deployed additive image is
+`sha256:1c61376651dfdb8dd0eeffe4ae7ffc501ca83a214d7722b38418a7d2cb633128`.
+It retains the starter profile and adds Funclet's reviewed lockfile, including
+`three@0.177.0` and `@types/three@0.177.0`. Creator jobs still cannot install packages.
+
+[Nix package/VM checks](https://github.com/soytec/napplet-soy/actions/runs/40018419961),
+[four native builds and installer/updater regressions](https://github.com/soytec/napplet-soy/actions/runs/40018419985),
+and [Studio integration checks](https://github.com/soytec/napplet-soy/actions/runs/40018419864)
+passed before merge. The test-only follow-up also passed Studio CI. On the VPS,
+all 902 application tests, 5 relay, 18 Blossom, 9 GRASP and 3 backend isolation
+checks passed, followed by the production build and activation checks. An earlier
+candidate stopped before activation because its test expected the Bun 1.3.11-only
+operator tool to run under Bun 1.3.8; the corrected test verifies that refusal.
+
+The actual Funclet merge candidate passed isolated setup, 24 guidance/application
+tests, typecheck, build and sandbox checks against the new image. Conformance
+reported 5 passed, 0 failed and 5 skipped; the skipped manifest, wire and lifecycle
+checks remain unverified. The contributor proposal itself was not merged or published.
+
+Public HTTPS and the completed catalog scan identify the new release. The live
+Funclet listing shows **Proposed by hzrd149**. Studio, CVM, TURN, Caddy and all five
+application processes are healthy; deployed source hashes match. All eight
+pre-existing draft records and Git workspaces are unchanged, with one additional
+draft present after rollout. Unrelated private configuration and Studio egress
+policy are preserved. The installer remains **soyLI 0.31.2**.
+
+The previous release `20261023152532295-30964`, worker image
+`sha256:78a1530841e748abf8229ccad04a6077e8c9e24dbeb8c0887138e4d00a730eb8`
+and protected configuration backup are retained for rollback. Local evidence is in
+`.local/proposal-deploy/`. Older failed reviews need a **fresh Review & merge in
+Studio** from their proposal because they do not have the newly pinned candidate.
+
+### Previous application deployment — Wallet and Manage, 2026-10-23
+
+Verified website release: **`20261023152532295-30964`**, source
+`d09bd762f18007e31f0fa505ae9adbcea7c2045b` from
+[PR #39](https://github.com/soytec/napplet-soy/pull/39).
+The shell now includes the [NIP-60/61 wallet](WALLET.md) and
+[unified Manage tabs](MANAGE.md). Wallet loading starts with the selected account;
+trusted Cashu tokens received by paste or QR go directly to receipt and balance
+feedback. Outgoing payments retain their amount/fee review.
+
+TypeScript, all 897 application tests, 5 relay, 18 Blossom and 9 GRASP checks, and
+the production build passed on the VPS. Local application/service checks also
+passed. [Nix package/rebuild/VM validation](https://github.com/soytec/napplet-soy/actions/runs/39976631223),
+[all four native builds and installer/updater checks](https://github.com/soytec/napplet-soy/actions/runs/39976631132),
+and [Studio integration/browser CI](https://github.com/soytec/napplet-soy/actions/runs/39976631309)
+passed before merge. Nix's dependency output hash was updated to the exact value
+verified by CI for the added wallet libraries; runtime pins were unchanged.
+
+A fresh browser on public HTTPS passed direct paste receipt, simulated camera
+receipt and track shutdown, duplicate handling, explicit outgoing-payment review,
+automatic saved-wallet restoration, all Manage tabs and popover transaction history.
+These checks used intercepted fake mint/relay services, including a silent relay;
+no real funds or public test events were used. Physical-camera scanning and a real
+payment between independently operated wallets remain unverified.
+
+Public health and the completed catalog scan identify the new release. Studio,
+CVM, TURN, Caddy and all five application processes are healthy; source hashes match.
+All five saved draft records and Git workspaces, private configuration and Studio
+egress policy are preserved. No active or queued creator jobs were present at
+activation. Read-only relay/GRASP subscriptions, protected admin/metrics endpoints,
+Blossom and the other hosted site passed. External query timeouts from
+`relay.nostr.net` and `nostr.oxtr.dev` remain visible; the scan completed through
+other relays. The previous release `20261023105030380-26978` remains available for
+rollback. Local evidence is retained in `.local/wallet-deploy/`.
+
+The installer still serves the published **soyLI 0.31.2**, verified against source
+bytes. No new CLI release or Studio worker image was introduced.
+
+### Previous application deployment — Preserve running sessions, 2026-10-23
+
+Verified website release: **`20261023105030380-26978`**, source
+`cea49d9107e9da2434cff668c1c186b49288a2e5`.
+[PR #38](https://github.com/soytec/napplet-soy/pull/38) merged as `d991b76`:
+switching tabs/windows or scrolling an active compact napplet offscreen retains
+its iframe and host session. Explicit Stop/Restart, navigation/unmount and another
+explicit player still end the session; decorative media retains visibility cleanup.
+The follow-up `cea49d9` isolates a Studio publication test's proposal reads from
+public relays; it changes no production behavior.
+
+TypeScript, all 858 application tests, 5 relay, 18 Blossom and 9 GRASP checks, and
+the production build passed on the VPS. The same local application/service gates
+passed. [Nix validation](https://github.com/soytec/napplet-soy/actions/runs/39940933232)
+and [Studio/browser CI](https://github.com/soytec/napplet-soy/actions/runs/39941488513)
+passed. A guest browser on public HTTPS played Obsidian Breaker through three
+deterministic hidden/visible cycles without losing its frame, JavaScript marker or
+instance storage, then verified Restart resets and Stop closes the session. Studio
+hydrated without page errors. Native OS tab switching was not automated; browsers
+may still throttle or discard background pages.
+
+Public health and the completed catalog scan identify this release. Studio, CVM,
+TURN, Caddy and all five application processes are healthy; source hashes match.
+All five saved drafts and Git workspaces, private configuration and Studio egress
+policy are preserved. No active or queued Studio jobs were present at activation.
+The previous release `20261022145224492-95376` remains available for rollback.
+Read-only relay/GRASP subscriptions, Blossom health, protected admin/metrics routes
+and the other hosted site passed. The pre-existing `nostr.oxtr.dev` query failures
+remain visible; catalog refresh completes through the other relays.
+
+The website now serves the already-published **soyLI 0.31.2** installer, verified
+against the source bytes. No new CLI release, worker image, paid inference or public
+test publication was needed.
+
+### Previous application deployment — Remix preview and relay counts, 2026-10-22
+
+Verified website release: **`20261022145224492-95376`**, source
+`bca22941e22ea4ac8cbebf06f29a09f7a49d4fd0`, with the installer still pinned to
+**soyLI 0.31.1**. [PR #30](https://github.com/soytec/napplet-soy/pull/30) lets
+Studio play the original published napplet before the first remix build, retaining
+its exact revision and switching to the draft after successful checks. This works
+with both browser and server builds. [PR #34](https://github.com/soytec/napplet-soy/pull/34)
+updates Applesauce and relay COUNT/negentropy support; COUNT refusals preserve their
+cause, and multiple filters count a deduplicated union. [PR #36](https://github.com/soytec/napplet-soy/pull/36)
+makes the installer transfer test independent of the host CPU while explicitly
+verifying that the real installer still refuses unsupported CPUs.
+
+TypeScript, all 854 application tests, 5 relay, 18 Blossom and 9 GRASP checks, and
+the production build passed on the VPS. Original-preview browser checks passed in
+both build modes (30 assertions), with shell/account and private-preview regressions.
+[Studio CI](https://github.com/soytec/napplet-soy/actions/runs/39794596139),
+[Nix/VM validation](https://github.com/soytec/napplet-soy/actions/runs/39799493653)
+and [all four native platforms](https://github.com/soytec/napplet-soy/actions/runs/39799493351)
+passed before activation.
+
+HTTPS health and the fresh catalog identify this release. Live read-only relay
+checks verify NIP-45/77 advertisement, deduplicated multi-filter counts, ignored
+COUNT limits, explicit invalid-filter refusal, and a genuine empty count. Studio,
+CVM, TURN, Caddy and all five application processes are healthy. Source fingerprints
+match; all five saved draft records and Git workspaces, private configuration and
+Studio egress policy are preserved. The worker image remains
+`sha256:78a1530841e748abf8229ccad04a6077e8c9e24dbeb8c0887138e4d00a730eb8`.
+The other hosted site remains available. The catalog still reports pre-existing
+query timeouts from `nostr.oxtr.dev`; its refresh completes through the other relays.
+The production Studio page hydrates and opens account settings without browser
+console errors. No paid inference, public test events or new soyLI release were needed.
+
+### Installer-only refresh — Soytec transfer, 2026-10-22
+
+The hosted `/install.sh` now serves **soyLI 0.31.1**, verified byte-for-byte against
+the [published release asset](https://github.com/soytec/napplet-soy/releases/tag/soyli-v0.31.1).
+SHA-256: `00fdc18b4b46b9f4a089681ae470b8a38a6aebc0c19ee650de85fd988c99ae78`.
+Both the public source copy and built client copy in the active release were
+updated atomically after checking their previous hashes; original files are backed
+up outside the web root. No application process was restarted. At that point the application
+release remained `20261021141802851-42000`; this was not a full website deployment.
+
+The installer was activated after the real 0.31.0 → 0.31.1 upgrade passed, before
+the native GitHub repository transfer to `soytec/napplet-soy`. Post-transfer tests
+verify release discovery, fresh installation and recovery for an old updater that
+missed the transition. See [release verification and recovery](CLI-RELEASES.md).
+Existing Studio workspaces and the worker compatibility profile were not changed.
+
+### Previous application deployment — My work and signing, 2026-10-21
+
+Website release: **`20261021141802851-42000`**, source
+`af50f3c36d3413c6181fa00bbf1baa085415d707`, originally shipped with **soyLI 0.31.0**
+before the installer-only refresh above.
+[PR #33](https://github.com/zeSchlausKwab/napplet-soy/pull/33) fixes missing My work
+proposals by retaining repository relay hints from manifest source links. It also
+fixes browser merge signing: the shell now shares Studio's event-kind policy,
+including standard NIP-34 kind 1631. Merge starts with an immediate spinner and
+**Merging…** label, with live delivery and signer status until completion or failure.
+
+TypeScript and all 848 application tests passed locally and on the VPS, followed
+by 5 relay, 18 Blossom and 9 GRASP checks and the production build.
+[All four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39614132445),
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39614132534)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39614132480)
+passed before merge. The real-service regression now signs through the shell's
+account adapter and verifies retry after a refused merge-status signature, source
+merge and separate publication (48 assertions). Desktop/mobile browser checks
+verify immediate progress, disabled repeat submission, retry and completion states.
+
+HTTPS health and the refreshed catalog identify the deployed release. Studio,
+CVM, TURN, Caddy and all five application processes are healthy. Live read-only
+queries find the reported Obsidian Breaker proposal in both its page and My work,
+without repository warnings. The anonymous production page hydrates and opens
+account settings without browser console errors. Source fingerprints match.
+All four saved draft records, Git workspaces, private configuration and active
+Studio egress policy are unchanged. The worker image remains
+`sha256:78a1530841e748abf8229ccad04a6077e8c9e24dbeb8c0887138e4d00a730eb8`.
+The other hosted site remains available. No user proposal was merged, no paid
+inference was run, and no public test event was published. No soyLI update is needed.
+Refresh the shell and retry the existing reviewed merge.
+
+### Previous verified rollout — My work and author merges, 2026-10-21
+
+Website release: **`20261021121512046-56636`**, source
+`30d5e957e00f8dfb17e6784ba735a9f755edf68e`, installer still pinned to **soyLI 0.31.0**.
+[PR #32](https://github.com/zeSchlausKwab/napplet-soy/pull/32) adds proposal delivery
+progress, reviewed author merges in Studio, and **My work** with drafts, publications,
+incoming/submitted proposals and recent activity. Account and navigation dots use
+explicit, browser-local read markers. Merging source and publishing the updated
+original listing remain separate reviewed actions.
+
+TypeScript and all 843 application tests passed locally and on the VPS, followed
+by 5 relay, 18 Blossom and 9 GRASP checks and the production build.
+[All four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39596350763),
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39596350495)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39596350566)
+passed before merge. Studio CI passed on retry after an upstream service connection
+timeout; no source changes were needed. Independent ngit 2.6.1 interoperability
+also passed locally. The merged tree matches the tested PR head.
+
+HTTPS health and the fresh catalog index both identify the deployed release.
+Studio, CVM, TURN, Caddy and all five application processes are healthy, with zero
+application restarts. The live My work page initializes and opens account settings
+without browser console errors. Deployed source fingerprints match the merged code.
+The three saved draft records, Git worktrees and private configuration are unchanged;
+active Studio egress rules match the configured policy. Raw firewall hashes include
+changing Docker traffic counters and are not used as a preservation assertion.
+The other hosted site remains available.
+
+The accepted worker image remains
+`sha256:78a1530841e748abf8229ccad04a6077e8c9e24dbeb8c0887138e4d00a730eb8`.
+No paid inference, real-account proposal merge or public test publication was
+performed during deployment. No soyLI release was needed. Refresh the site and
+open [My work](https://napplet.soy/manage); supported incoming proposals can be
+reviewed in Studio before an explicit merge and subsequent Publish.
+
+### Previous verified rollout — hosted worker recovery, 2026-10-21
+
+Website release: **`20261021091028374-54156`**, source
+`e59f66710d14bcebef9310a5f568c5cd8cae9a17`, installer still pinned to **soyLI 0.31.0**.
+[PR #31](https://github.com/zeSchlausKwab/napplet-soy/pull/31) fixes hosted worker
+crashes under thread pressure. The old 128-slot process/thread limit triggered
+Bun's allocator failure during parallel browser checks. Node now supervises source
+recovery independently of the child runtime; Docker init and private-namespace
+cleanup release orphaned processes before export. The allowance is 512 slots and
+agent guidance requests sequential checks. CPU, memory and network isolation remain.
+
+TypeScript and all 839 application tests passed locally and on the VPS, followed by
+relay, Blossom and GRASP integration checks and the production build.
+[All four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39573298364),
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39573298377)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39573298577)
+passed before merge. The merged tree matches the tested PR head.
+
+The deployed offline recovery regression passed thread exhaustion with 12 MiB of
+source export, Git exclusions, child signal exit 132 and subsequent job reuse.
+The unchanged pinned worker image,
+`sha256:78a1530841e748abf8229ccad04a6077e8c9e24dbeb8c0887138e4d00a730eb8`,
+also passed scripted OpenCode build repair, browser-check handoff, timeout recovery,
+media capture and cancellation acceptance before deployment. No paid inference,
+public test publication or edits to live drafts were performed.
+
+HTTPS health identifies the new release, the catalog index is fresh, and Studio,
+CVM, TURN, Caddy and all five application processes are healthy. Deployed source
+fingerprints match the merged code. The three reported draft records, existing Git
+repositories, private configuration and firewall fingerprints are unchanged; the
+other hosted site remains available. The temporary legacy CPU profile is retained.
+Refresh Studio and retry the failed turn; no CPU upgrade or soyLI release is needed.
+
+### Previous verified rollout — hosted remix networking, 2026-10-21
+
+Website release: **`20261021070722753-55473`**, source
+`d57f87421b6b3ab193bf6ff118f95eccc9e2535d`, installer still pinned to **soyLI 0.31.0**.
+[PR #29](https://github.com/zeSchlausKwab/napplet-soy/pull/29), squash-merged as
+`01e0ec989cf973f952e8f197a021ab943af64ab4` with an identical tree, fixes hosted
+remix imports failing before either build path. Credential-free Node workers use
+the existing public DNS/TLS guards without Bun's loopback tunnel, which Studio's
+egress firewall rejects. Worker code resolves from the trusted installation even
+when soyLI runs inside a private draft directory.
+
+TypeScript and 837 application tests passed locally and on the VPS, along with
+native service and production build checks. The deployed source passed
+[all four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39559747945),
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39559747947)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39559747910).
+The new network-namespace regression exercises the real CLI under Studio's
+generated firewall, including private IP/DNS, redirect and certificate refusals.
+
+Live imports of both reported source releases completed under the Studio UID in
+5.7 and 5.4 seconds, preserving their exact upstream manifest and Git revisions.
+HTTPS health and the fresh catalog index identify the new release. Deployed source
+fingerprints match; Studio, CVM, TURN, Caddy and all five application processes
+are healthy. Existing draft/Git, private configuration and firewall fingerprints
+are unchanged, as is the worker image. Disposable import workspaces were removed.
+No paid inference or public test publication was performed. Refresh Studio and
+retry existing failed remix drafts; no republishing or soyLI update is needed.
+
+### Previous verified rollout — Studio timeout recovery, 2026-10-20
+
+Website release: **`20261020133734312-91324`**, source
+`fe512144ba1dcbe30da8379da37cd5ea1faef31f`, installer still pinned to **soyLI 0.31.0**.
+[PR #28](https://github.com/zeSchlausKwab/napplet-soy/pull/28) fixes hosted Studio
+timeouts and unreadable recovery diagnostics. The worker now receives the
+controller's ten-minute execution budget instead of stopping at a hidden 550
+seconds. A further 30 seconds allows source export. `STUDIO_TIMEOUT` survives the
+worker boundary so Studio checks recovered edits without another inference turn.
+Internal source-transfer and agent frames are filtered before output truncation.
+
+TypeScript and 836 application tests passed locally and on the VPS, along with
+native service and production build checks.
+[All four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39431423671)
+passed before merge; the merged source passed
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39432923518)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39432923612).
+
+The accepted worker image is
+`sha256:78a1530841e748abf8229ccad04a6077e8c9e24dbeb8c0887138e4d00a730eb8`.
+Real OpenCode scripted acceptance covers server builds and repair, browser check
+bridging, response truncation, timeout/edit recovery, both capture orientations,
+failed-edit export and cancellation/reuse. No paid inference or public test
+publication was performed.
+
+Live HTTPS health and a fresh catalog index identify the new release. Deployed
+source and worker fingerprints match the tested artifacts. The reported published
+draft retains its Git revision, clean worktree and preview. Private configuration
+changed only its worker image, with the original preserved for rollback. Studio,
+CVM, TURN, Caddy and all five application processes are healthy; the shared parent
+Caddy configuration and other site are unchanged. Disposable Rust compiler
+intermediates from this deployment were removed; the installed executable and
+rollback releases remain. No soyLI release was needed.
+
+### Previous verified rollout — incomplete Studio turns, 2026-10-20
+
+Website release: **`20261020122308291-6231`**, source
+`ce2aeabf5331c6b45f40cfe17f9b1edf82a00ce1`, installer still pinned to **soyLI 0.31.0**.
+[PR #27](https://github.com/zeSchlausKwab/napplet-soy/pull/27) fixes incomplete
+Studio turns being reported as ready creations. Model cutoffs and unfinished tool
+turns now retain edits and report an actionable error; an unchanged starter cannot
+be promoted as a completed creation. The inference broker no longer imposes its
+own output-token cap, total-call ceiling or per-response timeout. Connection step
+budgets, overall deadlines and resource/isolation bounds remain.
+
+TypeScript and 833 application tests passed locally and on the VPS compatibility
+runtime. Deployment also passed native service checks and production rendering
+gates. [All four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39421156522)
+passed before merge; merged source passed
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39422762424)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39422762320).
+
+The accepted worker image is
+`sha256:23719cca357781e2b9fa48981b7eddfcff9750379e3fecce0cf377d2a553e81b`,
+updating the agent entrypoint over the previous pinned image. Scripted acceptance
+with real OpenCode covers server builds, browser compiler bridging, build repair,
+response truncation, both capture orientations, failure recovery and cancellation.
+The original cutoff reproduction now reports an incomplete turn and preserves
+OpenCode's requested token allowance.
+
+Live HTTPS/CVM acceptance confirms that checking an untouched starter produces
+`STUDIO_NO_CHANGES` without promoting a preview. Its disposable owner was removed
+after revocation. Existing user drafts and repositories were preserved; no paid
+inference or public test publication was performed. Public health and the fresh
+index match the release; deployed source and worker fingerprints are verified.
+The image switch preserves unrelated private configuration and has a paired
+rollback backup. Shared Caddy configuration and the other hosted site are unchanged.
+No soyLI release was needed.
+
+### Previous verified rollout — private preview downloads, 2026-10-20
+
+Website release: **`20261020111402553-16211`**, source
+`028c1447f7400e8116a7bc9d7ba61193c8d18bd6`, installer still pinned to **soyLI 0.31.0**.
+[PR #26](https://github.com/zeSchlausKwab/napplet-soy/pull/26) fixes private Studio
+previews showing “Download unavailable” after successful builds. The trusted player
+now includes its same-origin access cookie when downloading the immutable artifact.
+Public downloads still omit credentials, and integrity checks and sandbox isolation
+remain enforced. Existing drafts need a page refresh, not another inference run.
+
+The fix passed 828 application tests locally and during the standard VPS deployment,
+plus native service checks and production build/rendering gates.
+[All four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39412989782)
+passed before merge; the merged source passed
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39414166759)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39414163984).
+The new HTTPS browser regression reproduces the original 403 through the actual
+player download path, then verifies playback, input, opaque-origin isolation,
+anonymous denial and session revocation after the fix.
+
+Live Chromium acceptance on a disposable private draft confirmed artifact HTTP 200,
+game rendering and input, opaque origin, and HTTP 403 after session revocation.
+The disposable workspace was removed; existing user drafts were preserved.
+Deployed source fingerprints and public health match the release. Services are
+healthy, the shared Caddy configuration is unchanged, and the other hosted site
+remains available. The worker image and CLI release are unchanged. No paid
+inference or public test publication was performed.
+
+### Previous verified rollout — hosted Studio, 2026-10-19
+
+Website release: **`20261019161500000-2714`**, source
+`bb271c4aa15980a36a8d825d126defc62691dc7e`, installer pinned to **soyLI 0.31.0**.
+[PR #25](https://github.com/zeSchlausKwab/napplet-soy/pull/25) adds hosted BYOK Studio,
+with browser compilation and isolated server builds under the shared shell account.
+Provider keys are encrypted outside projects. Native Git remains authoritative;
+existing local drafts, repositories and the local soyLI flow are preserved.
+See [hosted setup, architecture and limits](STUDIO-HOSTING.md).
+
+The tagged source passed [all four native platforms](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39275681961),
+[Nix/VM checks](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39275671629)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39275672088).
+An initial candidate was refused before activation: Studio's new identity consumer
+was outside the identity provider, so server rendering failed despite API health.
+Correction `904b6f4` passed a real production HTTP regression, then
+[Nix CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39280022578) and
+[service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39280022575).
+The regression is now part of CI, and deployment explicitly checks the landing and
+Studio pages before activation. The final follow-up only corrects the dashboard's
+local-only storage wording and passed [service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39283306368).
+Both full deployments passed 827 application tests,
+relay/Go race checks, 18 Blossom tests, nine GRASP tests, three Linux backend checks,
+production builds, candidate rendering and service activation checks.
+
+The accepted legacy worker image is
+`sha256:8f07b5e4eb34a29eef982889dc799f66eddf0dcd2a2bac6fde1c7e3b1d514bae`.
+Its scripted OpenCode acceptance covers guidance loading, build failure/repair,
+the agent-to-browser compiler bridge, landscape/portrait captures, recoverable
+failures and cancellation. A dedicated Linux controller under the service
+restrictions passes private credentials, scaffold/setup, server checks, a real
+browser compiler round trip, private previews and logout revocation. This caught a
+0077-umask input-permission bug; the subprocess regression fails before the fix and
+passes after explicit child modes while the private parent stays 0700.
+
+Public HTTPS acceptance repeats owner authorization, encrypted connection storage,
+private draft setup, server checks, actual Chromium compilation, private preview
+and artifact access, and logout revocation. The test's file-copy handoff was made
+atomic after a partial gzip read; application code and timeouts were unchanged.
+Live UI checks cover extension sign-in, My creations, AI connections, cloud provider
+choices, the browser-build switch, a 390px create layout without horizontal overflow,
+and sign-out. Existing Blockfall playback reaches a verified canvas at mobile and
+desktop sizes. The three disposable private workspaces were removed. No paid
+inference or public napplet/proposal test publication was performed.
+
+The website installer matches the tagged source. All 11 release assets have
+verified checksums; a fresh isolated macOS ARM64 install reports 0.31.0.
+GitHub rate-limited the local
+unauthenticated doctor/update lookup; the authenticated release API independently
+confirmed the latest tag. Deployed source fingerprints, public service endpoints,
+fresh index heartbeat, all five PM2 services, Caddy/CVM/TURN and Studio are checked.
+The parent Caddy configuration is unchanged, and the other hosted site remains
+available. Studio uses its dedicated one-GiB volume and UID-scoped egress policy;
+the controller has zero restarts. The previous working releases are retained.
+
+Platform-paid inference, broader storage retention/recovery, authoritative browser
+Git and an aggregate proposal inbox/browser merge remain deferred. Physical phones,
+long-term uptime and reboot recovery were not verified in this rollout.
+
+### Previous verified rollout — local Studio beta, 2026-10-19
+
+Website release: **`20261019120616384-43901`**, source
+`14e9343dff5eb27815eaa9fe64f50490f01c0ffb`, installer pinned to **soyLI 0.30.0**.
+Merged [PR #24](https://github.com/zeSchlausKwab/napplet-soy/pull/24) adds the local
+Studio beta, reliable publication feedback, gameplay capture and the shared theme.
+The production shell labels Studio as a local beta and links to checkout/setup
+instructions. Hosted Studio remains disabled; production does not contact a
+visitor's localhost. Browser Git remains opt-in and native Git remains authoritative
+for publication and proposals. Storage/recovery work is deferred.
+
+[Native release CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39249208939),
+[Nix package/VM CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39249155519)
+and [Studio service CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/39249155484)
+passed for the exact released source. The standard deployment checks passed on the
+VPS compatibility runtime: TypeScript, 812 application tests, Go race/relay checks,
+18 Blossom tests, nine GRASP tests, three Linux backend checks and the production
+build. The archive checksum was verified before extraction; all public CLI assets
+and their source manifest were available before the website installer was activated.
+
+Live desktop/390px browser checks pass the production entry points, local-beta
+explanation and Blockfall sandbox startup without page errors or localhost requests.
+The smoke script's play selector was corrected to the existing accessible name
+(`Start blockfall`); application code was unchanged. Blockfall's exact current
+publication now reports `ready`, where the previous website returned `pending`
+despite its verified artifact and fresh index. Unrelated relay failures remain
+visible in health and no longer veto that publication's confirmation.
+
+The public installer matches the released/local installer bytes. Deployed source
+fingerprints match; all five PM2 services are online with zero restarts, and
+Caddy/CVM/TURN are active. A fresh index scan reports the new release. The shared
+proxy hash is unchanged and schlaustronics.com returns HTTPS 200. Persistent state,
+port 3040, legacy CPU settings and previous release `20261014193031446-12904` are
+retained. No public test events, invoices, payments or paid inference were created.
+Physical phones, reboot recovery and long-term uptime were not verified here.
+
+### Previous verified rollout — 2026-10-15
+
+Website release: **`20261014193031446-12904`**, source
 `6d0d6cc2794b31a221ff7f009a82ec0946087e9a`, installer pinned to **soyLI 0.29.0**.
 [Release CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/38622887368)
 and [Nix package/VM CI](https://github.com/zeSchlausKwab/napplet-soy/actions/runs/38619572566)

@@ -1,3 +1,4 @@
+import { ProtocolClient } from '../../client/src/nostr';
 import { publicationDestinations } from '../../nostr/src/publication-copies';
 import {
   planLifecycle,
@@ -9,6 +10,7 @@ import {
 import { migrationTemplate } from '../../migration/src';
 import {
   MANIFEST_PRESENTATION_PROFILE,
+  NIP5D_PRESENTATION_PROFILE,
   manifestScreenshotSources,
   manifestVideoSources,
 } from '../../protocol/src/presentation';
@@ -27,7 +29,14 @@ import {
   verifiedEvent,
   type SignedEvent,
 } from '../../protocol/src';
-import { generateSecretKey, getPublicKey, matchFilter, nip19 } from 'nostr-tools';
+import {
+  finalizeEvent,
+  generateSecretKey,
+  getPublicKey,
+  matchFilter,
+  matchFilters,
+  nip19,
+} from 'nostr-tools';
 import { DiagnosticError } from '../../diagnostics/src';
 import { validateManifest } from '../../protocol/src/manifest';
 import { sourceGit, sourceUrls } from '../../grasp/src/client';
@@ -113,6 +122,7 @@ async function fixture() {
       )
       .reduce<SignedEvent | null>((best, e) => (!best || newer(e, best) ? e : best), null);
   const deps: NonNullable<PublishOptions['dependencies']> = {
+    proposalClient: Object.assign(new ProtocolClient(() => []), { query: async () => [] }),
     website: async () => ({ checkedAt: Date.now(), ready: false, reason: 'pending' }),
     relays: {
       latest,
@@ -207,6 +217,35 @@ test('large valid publication journals round-trip without exceeding the bounded 
     const excessive = join(f.root, 'excessive.json');
     await Bun.write(excessive, ' '.repeat(MAX_PUBLICATION_JOURNAL_BYTES + 1));
     await expect(readJson(excessive)).rejects.toThrow();
+  } finally {
+    await f.close();
+  }
+});
+
+test('publication journals retain check coverage and warnings across resume', async () => {
+  const f = await fixture();
+  try {
+    const check = {
+      profile: 'test',
+      browser: 'test',
+      coverage: {
+        startup: 'passed' as const,
+        interaction: { status: 'not-run' as const, actions: 0 },
+        mediaCoordination: 'not-verified' as const,
+        independentHost: 'not-run' as const,
+      },
+      warnings: ['Interaction not measured.'],
+    };
+    await publishProject({ ...f.options, check: async () => check });
+    expect((await f.load()).check).toEqual(check);
+    await publishProject({
+      ...f.options,
+      resume: true,
+      check: async () => {
+        throw new Error('Must reuse frozen evidence');
+      },
+    });
+    expect((await f.load()).check).toEqual(check);
   } finally {
     await f.close();
   }
@@ -486,10 +525,15 @@ test('preview upload and direct manifest references survive interruption with id
     expect(appReferences(interrupted.current!)).toEqual([]);
     expect(interrupted.preview!.descriptor).toBeUndefined();
     expect(interrupted.receipts.descriptor).toBeUndefined();
+    // New releases use NIP-5D presentation media (PR 2303 at c041f84), no Soy profile tag.
+    expect(interrupted.presentationProfile).toBe(NIP5D_PRESENTATION_PROFILE);
     expect(interrupted.current!.tags).toContainEqual([
-      'presentation',
-      MANIFEST_PRESENTATION_PROFILE,
+      'screenshot',
+      `x ${await sha256(previewPng)}`,
+      'm image/png',
+      `size ${previewPng.length}`,
     ]);
+    expect(interrupted.current!.tags.some((t) => t[0] === 'presentation')).toBe(false);
     expect(manifestScreenshotSources(interrupted.current!).map((c) => c.url)).toEqual([
       `${interrupted.plan.targets.blossom}/${await sha256(previewPng)}`,
     ]);
@@ -614,6 +658,36 @@ test('older releases gain a preview without code edits; Blossom can change on a 
   }
 });
 
+test('a frozen soy.presentation/1 job resumes with its original tags and signatures', async () => {
+  const f = await fixture();
+  try {
+    f.options.requirePreview = true;
+    f.options.check = async () => ({ profile: 'test', browser: 'test', preview: previewPng });
+    let interrupted = false;
+    f.deps.checkpoint = async (job) => {
+      if (!job.source && !interrupted) {
+        interrupted = true;
+        // Simulate a job frozen by the previous CLI, before it signed anything.
+        job.presentationProfile = MANIFEST_PRESENTATION_PROFILE;
+        await f.journal.save(job);
+        throw new Error('Old process stopped before signing');
+      }
+    };
+    await expect(publishProject(f.options)).rejects.toMatchObject({ code: 'PUBLISH_FAILED' });
+    delete f.deps.checkpoint;
+    await publishProject({ ...f.options, resume: true });
+    const job = await f.load();
+    expect(job.presentationProfile).toBe(MANIFEST_PRESENTATION_PROFILE);
+    expect(job.status).toBe('announced_pending_index');
+    expect(job.current!.tags).toContainEqual(['presentation', MANIFEST_PRESENTATION_PROFILE]);
+    expect(job.current!.tags).toContainEqual(['screenshot', job.preview!.hash, 'image/png']);
+    expect(job.current!.tags.find((t) => t[0] === 'source-archive')).toHaveLength(2);
+    expect(manifestScreenshotSources(job.current!)).toHaveLength(1);
+  } finally {
+    await f.close();
+  }
+});
+
 for (const snapshot of [false, true]) {
   test(`${snapshot ? 'paired' : 'named-only'} frozen descriptor jobs resume unchanged, then migrate on an explicit fresh publication`, async () => {
     const f = await fixture();
@@ -643,7 +717,7 @@ for (const snapshot of [false, true]) {
       expect((await f.load()).current).toEqual(signed);
       await publishProject(f.options);
       const fresh = await f.load();
-      expect(fresh.presentationProfile).toBe(MANIFEST_PRESENTATION_PROFILE);
+      expect(fresh.presentationProfile).toBe(NIP5D_PRESENTATION_PROFILE);
       expect(fresh.plan.artifactHash).toBe(old.plan.artifactHash);
       expect(fresh.plan.identifier).toBe(old.plan.identifier);
       expect(fresh.plan.pubkey).toBe(old.plan.pubkey);
@@ -1895,3 +1969,207 @@ for (const withAliases of [false, true])
       await f.close();
     }
   }, 15000);
+
+// Exercise real relay discovery and delivery; only the Git ref listing is stubbed.
+async function linkedProposalFixture() {
+  const f = await fixture();
+  const relayEvents: SignedEvent[] = [];
+  const server = Bun.serve<{ hinted: boolean }>({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch(request, server) {
+      return server.upgrade(request, {
+        data: { hinted: new URL(request.url).pathname === '/hinted' },
+      })
+        ? undefined
+        : new Response('', { status: 400 });
+    },
+    websocket: {
+      message(ws, raw) {
+        const [op, id, ...filters] = JSON.parse(String(raw));
+        if (op === 'REQ') {
+          if (ws.data.hinted)
+            for (const event of relayEvents.filter((e) => matchFilters(filters, e)))
+              ws.send(JSON.stringify(['EVENT', id, event]));
+          ws.send(JSON.stringify(['EOSE', id]));
+        } else if (op === 'EVENT') {
+          const event = verifiedEvent(id);
+          if (ws.data.hinted && !relayEvents.some((e) => e.id === event.id))
+            relayEvents.push(event);
+          ws.send(JSON.stringify(['OK', event.id, true, '']));
+        }
+      },
+    },
+  });
+  const relay = `ws://127.0.0.1:${server.port}/hinted`;
+  f.options.targets = {
+    relay: `ws://127.0.0.1:${server.port}/fallback`,
+    grasp: `http://127.0.0.1:${server.port}`,
+  };
+  const signer = await f.accounts.signer();
+  try {
+    await publishProject(f.options);
+    const original = await sourceGit(f.project, ['rev-parse', 'HEAD']);
+    await Bun.write(
+      join(f.project, 'index.html'),
+      '<!doctype html><title>Merged</title><p>Contribution</p>',
+    );
+    await sourceGit(f.project, ['add', 'index.html']);
+    await sourceGit(f.project, ['commit', '-m', 'Include contribution']);
+    const commit = await sourceGit(f.project, ['rev-parse', 'HEAD']);
+    const identifier = 'linked-review';
+    const address = `30617:${f.creator.pubkey}:${identifier}`;
+    await sourceGit(f.project, [
+      'remote',
+      'add',
+      'origin',
+      `nostr://${nip19.npubEncode(f.creator.pubkey)}/${encodeURIComponent(relay)}/${identifier}`,
+    ]);
+    // The optional relays tag is deliberately absent: only the URL tells us where to look.
+    f.record(
+      relay,
+      await signer.signEvent({
+        kind: 30617,
+        created_at: 10,
+        content: '',
+        tags: [
+          ['d', identifier],
+          ['clone', `http://127.0.0.1:${server.port}/source.git`],
+        ],
+      }),
+    );
+    let served: Record<string, string> = {};
+    async function state(refs: Record<string, string>, at: number, cloneRefs = refs) {
+      served = cloneRefs;
+      f.record(
+        relay,
+        await signer.signEvent({
+          kind: 30618,
+          created_at: at,
+          content: '',
+          tags: [['d', identifier], ...Object.entries(refs), ['HEAD', 'ref: refs/heads/main']],
+        }),
+      );
+    }
+    await state({ 'refs/heads/main': commit }, 10);
+    f.deps.lsRemote = async (_dir, _url, refs) =>
+      refs
+        .filter((ref) => served[ref])
+        .map((ref) => `${served[ref]}\t${ref}`)
+        .join('\n');
+    const proposal = finalizeEvent(
+      {
+        kind: 1618,
+        created_at: 20,
+        content: 'Contribution',
+        tags: [
+          ['a', address],
+          ['c', commit],
+          ['clone', `http://127.0.0.1:${server.port}/source.git`],
+          ['target-branch', 'main'],
+        ],
+      },
+      generateSecretKey(),
+    );
+    relayEvents.push(proposal);
+    delete f.deps.proposalClient;
+    return {
+      ...f,
+      original,
+      commit,
+      proposal,
+      relayEvents,
+      state,
+      close: async () => {
+        await signer.close();
+        server.stop(true);
+        await f.close();
+      },
+    };
+  } catch (error) {
+    await signer.close();
+    server.stop(true);
+    await f.close();
+    throw error;
+  }
+}
+
+test('linked publication discovers and closes included proposals using source URL relay hints', async () => {
+  const f = await linkedProposalFixture();
+  try {
+    expect((await publishCommitted(f.options)).status).toBe('announced_pending_index');
+    const job = await f.load();
+    expect(job.appliedBranch).toBe('main');
+    expect(job.appliedStatuses).toHaveLength(1);
+    expect(JSON.parse(JSON.stringify(f.relayEvents.filter((e) => e.kind === 1631)))).toEqual(
+      job.appliedStatuses!,
+    );
+    expect(job.appliedStatuses![0].tags).toContainEqual(['e', f.proposal.id, '', 'reply']);
+  } finally {
+    await f.close();
+  }
+}, 30000);
+
+for (const moved of ['signed target', 'clone target', 'missing saved target'] as const)
+  test(`resumed linked publication refuses applied status after ${moved} changes, then reuses its signatures`, async () => {
+    const f = await linkedProposalFixture();
+    try {
+      let interrupted = false;
+      f.deps.checkpoint = async (job) => {
+        if (!interrupted && job.appliedStatuses?.length) {
+          interrupted = true;
+          throw new Error('Interrupt after status preparation');
+        }
+      };
+      await expect(publishCommitted(f.options)).rejects.toThrow(
+        'Interrupt after status preparation',
+      );
+      const saved = await f.load();
+      expect(saved.appliedBranch).toBe('main');
+      expect(saved.appliedStatuses).toHaveLength(1);
+      // Retaining the release under a tag must not count as merging it into main.
+      const movedRefs = { 'refs/heads/main': f.original, 'refs/tags/reviewed': f.commit };
+      await f.state(
+        moved === 'signed target'
+          ? movedRefs
+          : { 'refs/heads/main': f.commit, 'refs/tags/reviewed': f.commit },
+        30,
+        moved === 'clone target' ? movedRefs : undefined,
+      );
+      if (moved === 'missing saved target') {
+        delete saved.appliedBranch;
+        await f.journal.save(saved);
+      }
+      // Resuming from another local branch still checks the originally reviewed target.
+      await sourceGit(f.project, ['switch', '-c', 'another-local-branch']);
+      await expect(publishCommitted({ ...f.options, resume: true })).rejects.toThrow(
+        moved === 'clone target'
+          ? 'No clone URL'
+          : 'no longer confirms the reviewed proposal target',
+      );
+      const failed = await f.load();
+      expect(failed.appliedStatuses).toEqual(saved.appliedStatuses!);
+      expect(f.relayEvents.filter((e) => e.kind === 1631)).toHaveLength(0);
+      expect(failed.receipts.source).toBe(false);
+      // The persisted diagnostic is useful through the actual CLI status entrypoint too.
+      const [code, output, error] = await cliStatus(f.project, true);
+      expect(code, output + error).toBe(0);
+      expect(output).toContain(
+        moved === 'clone target' ? 'SOURCE_NOT_PUSHED' : 'PROPOSAL_TARGET_CHANGED',
+      );
+      expect(output).toContain(
+        moved === 'missing saved target' ? 'unknown branch' : 'refs/heads/main',
+      );
+      await f.state({ 'refs/heads/main': f.commit }, 40);
+      if (moved === 'missing saved target') {
+        failed.appliedBranch = 'main';
+        await f.journal.save(failed);
+      }
+      await publishCommitted({ ...f.options, resume: true });
+      expect(JSON.parse(JSON.stringify(f.relayEvents.filter((e) => e.kind === 1631)))).toEqual(
+        saved.appliedStatuses!,
+      );
+    } finally {
+      await f.close();
+    }
+  }, 30000);

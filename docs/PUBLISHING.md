@@ -9,6 +9,15 @@ kind-5129 publication. The returned `/r/<current-event-id>` link already pins an
 exact signed named revision without requiring that additional snapshot. Back up
 the journal and index: relays may prune replaced named events.
 
+The experimental [local Quick Vibe studio](QUICK-VIBE.md#publish-from-the-studio)
+also uses this publisher. Its Publish dialog prepares real captures, reviews exact
+source/metadata/destinations, and requests signatures through the shell's existing
+account picker after confirmation (extension, remote signer or browser-held key).
+It retains the same journal and listing identity. Remixed projects can also prepare
+and submit reviewed NIP-34 proposals through the existing GRASP collaboration flow,
+including a playable build, without creating another napplet listing. Hosted browser
+execution remains separate work; the local controller must stay on loopback.
+
 ## Commands available from this checkout
 
 ```sh
@@ -211,7 +220,7 @@ The CLI builds source only on explicit publish/propose/build commands. Library
 callers supply their built artifact; checks and merely opening a review do not run
 project scripts. Standard build metadata and required NAP domains are checked.
 
-The browser check runs the frozen HTML under our current shared host, CSP, opaque iframe sandbox and shim. It checks startup, the shell handshake, script errors and CSP violations, while blocking external network requests. It does not use an inherited preview server or modified runtime bundle. This is a startup smoke check, not comprehensive gameplay, performance, NAP, or external-service conformance testing. The compiler runs in a fresh Bun process to avoid the pinned runtime's known build/read issue after networking. The check report records the runtime profile and browser version.
+The browser check runs the frozen HTML under our current shared host, CSP, opaque iframe sandbox and shim. It checks startup, the shell handshake, script errors and CSP violations, while blocking external network requests. A napplet that posts at window level, sends a second NIP-5D handoff, reloads or navigates away fails with `NAPPLET_REVOKED` and the host's stated cause. A blocked frame navigation is reported as a `frame-src` CSP violation. It does not use an inherited preview server or modified runtime bundle. It also replays configured `preview.recording` inputs, including when retaining existing release media and without encoding another clip. This catches script/CSP failures behind Play or other configured controls. Without inputs, interaction is explicitly unmeasured. Executed inputs are not assertions of gameplay correctness, media coordination, performance or external-service behavior. The compiler runs in a fresh Bun process to avoid the pinned runtime's known build/read issue after networking. The check report records runtime/browser versions plus `coverage` and `warnings`: startup, interaction status/action count, unverified media coordination and independent-host testing not run. Publication journals and isolated Studio workers preserve this evidence; older records remain readable without inventing coverage. Studio shows skips and warnings separately from command success. Test the same artifact in an independent shell before claiming cross-host compatibility. These records are local check evidence, not new manifest fields or conformance certificates.
 
 The archive comes from Git's tar of the exact frozen commit. The publisher disables
 `export-ignore` and `export-subst` in its private frozen clone, so root and nested
@@ -294,7 +303,20 @@ uses standalone manifests even when the HTML has not changed. No history rewrite
 or republishing of other authors' events is needed. Deploy the compatible shell
 and indexer before distributing a CLI that publishes the new shape.
 
-Two optional provenance tags, `source-commit` and `source-archive`, carry the exact Git commit and content-addressed source tar URL. These are Space publishing conventions, not NIP-5D requirements. Clients may ignore them; ordinary `source`, manifest and Blossom discovery still work. There is no mandatory descriptor, branded hashtag or current-to-snapshot pointer. Fresh jobs upload the screenshot and optional clip, then put their hashes and MIME types directly on the current manifest and any explicitly requested snapshot using the optional downstream `soy.presentation/1` profile. They emit no kind-32267 descriptor or `app` reference. See [the presentation contract](PREVIEWS.md#direct-manifest-presentation--2026-10-06-source).
+Optional NIP-5D `source-commit` and `source-archive` tags carry the exact Git commit
+and source archive URL/digest/MIME at the selected `c041f84` pin. Public archives
+use the four-element HTTPS form; local HTTP development retains the legacy
+two-element form. Source remains optional for discovery and playback.
+
+Fresh jobs upload the selected PNG cover and optional clip, then put their hashes,
+MIME and available metadata directly on the current manifest and any requested
+snapshot using standard NIP-5D `screenshot`/`preview` key/value fields. They emit no
+`presentation` marker, kind-32267 descriptor or `app` reference. The authoring flow
+still selects one cover; the reader accepts up to eight standard screenshots from
+any publisher and ignores extras. MIME is optional when reading standard media:
+hash verification and supported-format decoding remain mandatory. There is no
+mandatory descriptor, branded hashtag or current-to-snapshot pointer. See
+[the presentation contract](PREVIEWS.md#nip-5d-presentation-media-and-source-fields--2026-11-02-source).
 
 Interrupted older jobs retain their frozen descriptor/signatures on `publish --resume`.
 The next ordinary publication upgrades a completed older job to direct references,
@@ -397,3 +419,11 @@ older jobs. Editable legacy HTML and committed source archives stay source; buil
 write the declarations into `dist/index.html`. See [asset coverage and backup limits](ASSETS.md#related-resource-links--soyli-0253).
 soyLI 0.25.3 prepares these declarations without requiring a host deployment.
 Existing napplets remain valid; rebuild and publish to add links to a future revision.
+
+After source confirmation, publication also delivers merged statuses for included
+Git proposals, using the same ancestry and revision checks as `soyli push`. A
+separate push is unnecessary for hosted releases. Signed statuses are journaled
+and retried with `publish --resume`; newer proposal revisions remain open. Linked
+source retries revalidate the saved target branch against signed state and the
+served Git branch before announcing a merge; a tag alone is not sufficient.
+See [proposal reconciliation and linked-source limits](COLLABORATION.md#proposal-status-during-publication).

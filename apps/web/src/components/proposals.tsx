@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { GitPullRequest, Play, Copy, RefreshCw, Terminal } from 'lucide-react';
+import { GitPullRequest, Play, Copy, RefreshCw, Terminal, Zap } from 'lucide-react';
 import { Button } from './ui/button';
 import { Player } from './player';
 import { network, protocolClient, manifestAllowed } from '@/lib/network';
@@ -16,8 +16,27 @@ import {
 } from '../../../../packages/collaboration/src/protocol';
 import type { SignedEvent } from '../../../../packages/protocol/src';
 import { switchMap, Subscription } from 'rxjs';
+import { useNostr } from './nostr-provider';
+import { useStudio } from './studio-provider';
+import { useNavigate, useLocation } from '@tanstack/react-router';
+import { CreatorLink } from './creator-link';
+import { ContributionGraph } from './contribution-graph';
+import { ZapButton } from './zap-button';
+import { socialScope } from '../../../../packages/protocol/src/social';
+import { retainedLifecycleHistory } from '@/lib/lifecycle';
 
 export function Proposals({ manifest, reference }: { manifest?: SignedEvent; reference?: string }) {
+  const identity = useNostr();
+  const [releaseHistory, setReleaseHistory] = useState<{
+    id: string;
+    events: SignedEvent[];
+    unavailable: boolean;
+  }>();
+  const { client: studio } = useStudio();
+  const navigate = useNavigate();
+  const search = useLocation({ select: (location) => location.searchStr });
+  const requested = new URLSearchParams(search).get('proposal');
+  const [preparingMerge, setPreparingMerge] = useState(false);
   const source = manifest && tag(manifest, 'source');
   const playback = useRef(0);
   const [repository, setRepository] = useState<Repository>();
@@ -30,14 +49,30 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
     [generation, refresh] = useState(0),
     [copied, setCopied] = useState(false);
   useEffect(() => {
+    if (!manifest) return;
+    let active = true;
+    void retainedLifecycleHistory(manifest).then((result) => {
+      if (active)
+        setReleaseHistory({
+          id: manifest.id,
+          events: result.manifests.filter(manifestAllowed),
+          unavailable: !result.complete,
+        });
+    });
+    return () => {
+      active = false;
+    };
+  }, [manifest?.id, generation]);
+  useEffect(() => {
     setSelected(undefined);
     setRevision(undefined);
     setPlaying(null);
     setRows([]);
+    setRepository(undefined);
     return () => {
       playback.current++;
     };
-  }, [source, reference]);
+  }, [source, reference, requested]);
   useEffect(() => {
     if (!source?.startsWith('nostr://') && !reference) return;
     let active = true;
@@ -48,7 +83,7 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
     void (async () => {
       const client = protocolClient();
       let repoRef = source!,
-        id: string | undefined;
+        id = requested && /^[a-f0-9]{64}$/.test(requested) ? requested : undefined;
       if (reference) {
         id = proposalId(reference);
         const root = await client.queryEvent(id, [1618, 1617], [], controller.signal);
@@ -62,7 +97,7 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
           .pipe(
             switchMap((repo) => {
               setRepository(repo);
-              return observeProposals(client, repo, id);
+              return observeProposals(client, repo, reference ? id : undefined);
             }),
           )
           .subscribe({
@@ -94,7 +129,7 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
       controller.abort();
       subscription.unsubscribe();
     };
-  }, [source, reference, generation]);
+  }, [source, reference, generation, requested]);
   const proposal = rows.find((p) => p.root.id === selected);
   const chosen = proposal?.revisions.find((r) => r.id === revision) ?? proposal?.revision;
   async function play(original = false) {
@@ -126,17 +161,39 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
     }
   }
   if (!source?.startsWith('nostr://') && !reference) return null;
+  function selectProposal(p: Proposal) {
+    playback.current++;
+    setLoading(false);
+    setError('');
+    setSelected(p.root.id);
+    setRevision(p.revision.id);
+    setPlaying(null);
+    setCopied(false);
+    requestAnimationFrame(() => {
+      const review = document.getElementById('proposal-review');
+      review?.focus({ preventScroll: true });
+      review?.scrollIntoView({ block: 'nearest' });
+    });
+  }
   const command = proposal ? `soyli review ${proposal.root.id}` : undefined;
   return (
-    <section className="proposal-section" aria-label="Proposed changes">
+    <section
+      id="proposals"
+      className="proposal-section"
+      aria-label={manifest ? 'Contribution history' : 'Proposed changes'}
+    >
       <div className="source-section-heading">
         <div>
           <span className="eyebrow">BUILD ON EACH OTHER</span>
           <h2>
-            <GitPullRequest size={25} /> Proposed changes
+            <GitPullRequest size={25} /> {manifest ? 'How it grew.' : 'Proposed changes'}
             <span className="proposal-count">{rows.length}</span>
           </h2>
-          <p>Play someone’s idea, discuss it, then bring it into the original.</p>
+          <p>
+            {manifest
+              ? 'Follow an idea from one creator to the next. Explore a contribution, or send its author a little lightning.'
+              : 'Play someone’s idea, discuss it, then bring it into the original.'}
+          </p>
         </div>
         <Button
           variant="ghost"
@@ -147,44 +204,96 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>
+      {manifest?.pubkey === identity.pubkey &&
+        repository?.maintainers.includes(identity.pubkey!) && (
+          <div className="author-management">
+            <h3>Your project</h3>
+            <p>
+              Select a proposal to review its changes and prepare a merge.{' '}
+              <a href="/manage">All your work ↗</a>
+            </p>
+          </div>
+        )}
       {!rows.length && !loading && !error && (
         <p className="muted">
-          No proposals yet. Remix the source, make a change, then use{' '}
-          <code>soyli propose "Description"</code>. No website account needed.
+          No proposals yet. Remix the source and make a change, then choose{' '}
+          <strong>Propose changes</strong> in local Studio or run{' '}
+          <code>soyli propose "Description"</code> with soyLI.
         </p>
       )}
-      <div className="proposal-list">
-        {rows.map((p) => (
-          <button
-            type="button"
-            key={p.root.id}
-            className={`proposal-row ${selected === p.root.id ? 'selected' : ''}`}
-            onClick={() => {
-              playback.current++;
-              setLoading(false);
-              setError('');
-              setSelected(p.root.id);
-              setRevision(p.revision.id);
-              setPlaying(null);
-              setCopied(false);
-            }}
-          >
-            <span>
-              <strong>{p.title}</strong>
-              <small>
-                {p.root.pubkey.slice(0, 12)}… ·{' '}
-                {new Date(p.root.created_at * 1000).toLocaleDateString()}
-              </small>
-            </span>
-            <span className="proposal-state">
-              {p.status}
-              {tag(p.revision, 'soy-preview') ? ' · playable' : ''}
-            </span>
-          </button>
-        ))}
-      </div>
+      {manifest ? (
+        <>
+          <ContributionGraph
+            manifest={manifest}
+            history={releaseHistory?.id === manifest.id ? releaseHistory.events : []}
+            proposals={rows}
+            selected={selected}
+            onSelect={selectProposal}
+            renderZap={(node) =>
+              node.event && (
+                <ZapButton
+                  key={node.event.id}
+                  data={{
+                    manifest,
+                    scope: socialScope(manifest),
+                    relays: repository?.relays ?? network().relays,
+                  }}
+                  reference={node.event.id}
+                  contribution={{ event: node.event, title: node.title }}
+                  trigger={
+                    <button
+                      type="button"
+                      className="contribution-zap"
+                      aria-label={`Zap ${node.title}`}
+                    >
+                      <Zap size={12} /> Zap
+                    </button>
+                  }
+                />
+              )
+            }
+          />
+          {releaseHistory?.id === manifest.id && releaseHistory.unavailable && (
+            <p className="muted" role="status">
+              Some release history could not be loaded. Showing the available contributions; refresh
+              to retry.
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="proposal-list">
+          {rows.map((p) => (
+            <button
+              type="button"
+              key={p.root.id}
+              className={`proposal-row ${selected === p.root.id ? 'selected' : ''}`}
+              onClick={() => {
+                playback.current++;
+                setLoading(false);
+                setError('');
+                setSelected(p.root.id);
+                setRevision(p.revision.id);
+                setPlaying(null);
+                setCopied(false);
+              }}
+            >
+              <span>
+                <strong>{p.title}</strong>
+                <span className="proposal-byline">
+                  <span>Proposed by</span> <CreatorLink pubkey={p.root.pubkey} linked={false} />
+                </span>
+                <small>{new Date(p.root.created_at * 1000).toLocaleDateString()}</small>
+              </span>
+              <span className="proposal-state">
+                {p.status}
+                {tag(p.revision, 'soy-preview') ? ' · playable' : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {proposal && chosen && (
-        <div className="proposal-review">
+        <div className="proposal-review" id="proposal-review" tabIndex={-1}>
           <div className="proposal-toolbar">
             <label>
               Revision{' '}
@@ -248,6 +357,46 @@ export function Proposals({ manifest, reference }: { manifest?: SignedEvent; ref
             </div>
           )}
           <a href={`/proposals/${proposal.root.id}`}>Link to this proposal ↗</a>
+          {manifest?.pubkey === identity.pubkey &&
+            repository?.maintainers.includes(identity.pubkey!) && (
+              <section className="author-management">
+                <h3>Manage this proposal</h3>
+                <p>
+                  Build a private merge candidate from the current upstream branch. Play it and
+                  inspect the diff in Studio before confirming the merge.
+                </p>
+                <Button
+                  disabled={
+                    preparingMerge ||
+                    !studio ||
+                    proposal.patch ||
+                    chosen.id !== proposal.revision.id ||
+                    !['open', 'draft'].includes(proposal.status)
+                  }
+                  onClick={() => {
+                    if (!studio) return;
+                    const pubkey = identity.pubkey;
+                    setPreparingMerge(true);
+                    setError('');
+                    void (async () => {
+                      const session = await studio.api<{ id: string }>('signers', { pubkey });
+                      const result = await studio.api<{ id: string }>('merge-reviews', {
+                        session: session.id,
+                        review: { proposal: proposal.root.id, revision: chosen.id, manifest },
+                      });
+                      await navigate({ href: `/studio/${result.id}` });
+                    })()
+                      .catch((e) => setError(e.message))
+                      .finally(() => setPreparingMerge(false));
+                  }}
+                >
+                  {preparingMerge ? 'Opening merge review…' : 'Review & merge in Studio'}
+                </Button>
+                {proposal.patch && (
+                  <p>This patch series can be merged with ngit using the review command below.</p>
+                )}
+              </section>
+            )}
         </div>
       )}
       {command && (

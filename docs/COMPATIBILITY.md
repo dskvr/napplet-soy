@@ -1,5 +1,15 @@
 # Compatibility evidence and remaining audit
 
+## NIP-5D port-bound identity — 2026-11-02 source
+
+Not yet released or deployed. Transport, Identity and Security follow NIP-5D PR 2303
+head `c041f84`; manifest writing keeps the `4d0fb2e` basis. Runtime bindings move to
+`@napplet/shim` 0.35.0 with core 0.37.0 and nap 0.36.0. Independent acceptance now
+uses Paja 0.29.0, whose host is port-bound, and passes all four current-manifest
+cases. Napplets that still post at window level are stopped by every port-bound
+host, including Paja. Evidence and catalog impact are in the
+[NAP review](NAP-REVIEW.md#nip-5d-port-bound-identity--2026-11-02-source).
+
 ## OUTBOX integration — released 0.29.0
 
 The shared web/preview host now implements verified Applesauce stores and network
@@ -115,10 +125,10 @@ smoke test and includes the guide/helper; other platform archives are build-only
 See [controller behavior and remaining checks](CONTROLLERS.md). Not deployed.
 
 Unreleased source after 0.25.3 denies native Gamepad access to player frames
-(`gamepad 'none'` in `PLAYER_ALLOW`). The shell brokers input through the merged upstream
+(`gamepad 'none'` in `PLAYER_ALLOW`). The shell brokers input through the proposed upstream
 [NAP-GAMEPAD draft](NAP-GAMEPAD.md), and a prelude shim keeps the standard API working
 for unmodified games. `gamepad` is now advertised in the runtime's domain list. It was
-merged upstream as [napplet/naps#108](https://github.com/napplet/naps/pull/108), merged at `19de5ce1cea40cd4c76089cdd8126e9f87648049`. This binding changes no SDK or NIP-5D pin. Native policy denial,
+proposed upstream in [napplet/naps#130](https://github.com/napplet/naps/pull/130), reviewed at `0b28f77e3dfa0f07dd7c0f9d61a7090ee99f3a5e`. This binding changes no SDK or NIP-5D pin. Native policy denial,
 focus isolation between side-by-side frames and the shim's API fidelity are tested
 in Chromium. Physical controllers, Safari and Firefox are unverified. Not released or
 deployed.

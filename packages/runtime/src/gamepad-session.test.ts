@@ -109,7 +109,7 @@ test('host samples are bounded and a policy denial on the shell is reported as b
   expect(sample.pads[0]!.id).toHaveLength(128);
   expect(sample.pads[0]!.axes).toEqual(Array(16).fill(1));
   expect(sample.pads[0]!.buttons).toHaveLength(32);
-  expect(sample.pads[0]!.buttons[0]).toEqual({ value: 0, pressed: true, touched: false });
+  expect(sample.pads[0]!.buttons[0]).toEqual({ value: 0, pressed: true, touched: true });
   expect(sampleGamepads(() => [{ ...huge, connected: false }]).pads).toEqual([null]);
   const denied = Object.assign(new Error('denied'), { name: 'SecurityError' });
   expect(

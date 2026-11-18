@@ -1,6 +1,7 @@
 /** Implemented NAP surfaces. Individual operations remain subject to host policy. */
 export const RUNTIME_DOMAINS = [
   'shell',
+  'llm',
   'identity',
   'intent',
   'storage',
@@ -20,12 +21,13 @@ export const RUNTIME_DOMAINS = [
   'webrtc',
   'gamepad',
 ] as const;
-export const RUNTIME_PROFILE = 'space-playback-6';
+export const RUNTIME_PROFILE = 'space-playback-9-llm-cvm-payments';
 
 // Only request types understood by this host. Notifications, responses and future
 // operations must be ignored, including unknown operations in supported domains.
 export const HOST_REQUESTS = new Set(
   Object.entries({
+    llm: ['select', 'describe', 'generate', 'cancel'],
     intent: ['invoke', 'available', 'handlers'],
     upload: ['info', 'upload', 'status'],
     lists: ['supported', 'add', 'remove'],
@@ -38,7 +40,7 @@ export const HOST_REQUESTS = new Set(
       'registry.describe',
       'registry.call',
     ],
-    webrtc: ['open', 'send', 'close'],
+    webrtc: ['open', 'send', 'sendBytes', 'close'],
     config: ['registerSchema', 'get', 'subscribe', 'unsubscribe', 'openSettings'],
     identity: [
       'getPublicKey',

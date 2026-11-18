@@ -9,7 +9,7 @@ export function validateWebPort(input = '3000') {
     !/^\d{4,5}$/.test(input) ||
     Number(input) < 1024 ||
     Number(input) > 65534 ||
-    [3477, 3478, 19346, 19347, 19348, 19349, 19350, 19351].includes(Number(input))
+    [3477, 3478, 19346, 19347, 19348, 19349, 19350, 19351, 19352].includes(Number(input))
   )
     throw new Error('--web-port must leave two free unprivileged ports outside the service ports.');
   return Number(input);
@@ -82,12 +82,16 @@ export async function createDeploymentArchive(archive: string) {
     'docs/DYNAMIC-BACKENDS-CREATOR.md',
     'docs/SHARED-DATA.md',
     'docs/OUTBOX.md',
+    'docs/FIPS-CREATOR.md',
+    'docs/WEBMCP.md',
+    'docs/examples/coordinated-audio.ts',
     'docs/RUNTIME-ACTIONS.md',
     'docs/CONTROLLERS.md',
     'docs/MOBILE.md',
     'docs/WASM.md',
     'docs/VISUAL-DESIGN.md',
     'docs/NIP5D-CREATOR.md',
+    'examples/nap-llm.ts',
     'apps',
     'packages',
     'scripts',

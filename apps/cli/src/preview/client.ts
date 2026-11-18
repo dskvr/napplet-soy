@@ -1,3 +1,9 @@
+import { entryRef, joinConvention } from '../../../../packages/multiplayer/src/directory';
+import { presentShellDialog } from '../../../../packages/runtime/src/shell-ui';
+import { fileDownloads } from '../../../../packages/runtime/src/file-downloads';
+import { inferenceService } from '../../../../packages/runtime/src/llm-service';
+import { ConnectionsDialog } from '../../../studio/connections-ui';
+import type { ConnectionState } from '../../../studio/connections-model';
 import { previewIntents } from './intent-client';
 import { AppearanceControl } from '../../../../packages/runtime/src/appearance-control';
 import { shellTheme } from '../../../../packages/runtime/src/appearance';
@@ -7,7 +13,11 @@ import shim from '@napplet/shim/prelude.global?raw';
 import { loadArtifact, PLAYER_ALLOW, PLAYER_SANDBOX } from '../../../../packages/runtime/src';
 import { nappletPrelude } from '../../../../packages/runtime/src/prelude';
 import { missingDomains } from '../../../../packages/runtime/src/capabilities';
-import { attachNappletHost, type HostPrompt } from '../../../../packages/runtime/src/host';
+import {
+  attachNappletHost,
+  revocationMessage,
+  type HostPrompt,
+} from '../../../../packages/runtime/src/host';
 import type { ExportFile } from '../../../../packages/runtime/src/filesystem';
 import type { PreviewRevision } from './server';
 import { setupListing } from './listing-client';
@@ -15,13 +25,60 @@ import { setupDiagnostics } from './diagnostics';
 import { setupControllers } from './controllers';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
+import { AgentToolsControl } from '../../../../packages/runtime/src/webmcp/control';
 import { SettingsControl } from '../../../../packages/runtime/src/settings-panel';
 import { MediaControls } from '../../../../packages/runtime/src/media-controls';
 import { declaredConfig } from '../../../../packages/runtime/src/config-schema';
+import { FipsSettings } from '../../../../packages/runtime/src/fips/settings';
 import { MultiplayerSettings } from '../../../../packages/runtime/src/multiplayer-settings';
 
 createRoot(document.querySelector('#appearance')!).render(createElement(AppearanceControl));
 
+const inferenceApi = async <T>(path: string, body?: unknown): Promise<T> => {
+  const response = await fetch('/inference/' + path, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: {
+      'X-Soyli-Token': document.querySelector<HTMLMetaElement>('meta[name="soyli-token"]')!.content,
+      'Content-Type': 'application/json',
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? 'Inference settings unavailable.');
+  return result;
+};
+const inferenceRootNode = document.createElement('div');
+document.body.append(inferenceRootNode);
+const inferenceRoot = createRoot(inferenceRootNode);
+const openInference = async () => {
+  try {
+    const state = await inferenceApi<{ connections: ConnectionState }>('state');
+    inferenceRoot.render(
+      createElement(ConnectionsDialog, {
+        state: state.connections,
+        busy: false,
+        api: inferenceApi,
+        refresh: openInference,
+        close: () => inferenceRoot.render(null),
+      }),
+    );
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Could not open AI connections.');
+  }
+};
+const inferenceButton = document.createElement('button');
+inferenceButton.textContent = 'AI connections';
+inferenceButton.onclick = () => {
+  void openInference();
+};
+document.querySelector('header')?.append(inferenceButton);
+const llm = inferenceService(
+  inferenceApi,
+  () => {
+    void openInference();
+  },
+  'Local soyLI service',
+);
 const stage = document.querySelector<HTMLElement>('#stage')!;
 const status = document.querySelector<HTMLElement>('#status')!;
 const dialog = document.querySelector<HTMLDialogElement>('#prompt')!;
@@ -31,10 +88,15 @@ const cancel = document.querySelector<HTMLButtonElement>('#cancel')!;
 const later = document.querySelector<HTMLButtonElement>('#later')!;
 const link = document.querySelector<HTMLAnchorElement>('#open-link')!;
 const exports = document.querySelector<HTMLElement>('#files')!;
+const toolsSlot = document.createElement('span');
+document.querySelector('#settings')!.before(toolsSlot);
+const toolsRoot = createRoot(toolsSlot);
 const settingsRoot = createRoot(document.querySelector('#settings')!);
 const mediaRoot = createRoot(document.querySelector('#media')!);
 const networkRoot = createRoot(document.querySelector('#network-settings')!);
-networkRoot.render(createElement(MultiplayerSettings));
+networkRoot.render(
+  createElement('div', null, createElement(MultiplayerSettings), createElement(FipsSettings)),
+);
 let settingsOpen = false;
 function settingsChanged(open: boolean) {
   settingsOpen = open;
@@ -43,7 +105,7 @@ function settingsChanged(open: boolean) {
 let host: ReturnType<typeof attachNappletHost> | undefined;
 let frame: HTMLIFrameElement | undefined;
 let choice: HostPrompt | null = null;
-let urls: string[] = [];
+
 let loaded = '';
 let pubkey: string | null = null;
 let viewerSigner: ExtensionSigner | undefined;
@@ -53,6 +115,7 @@ const intents = previewIntents({
   signal: lifetime.signal,
   sourceFrame: () => frame,
   hostOptions: () => ({
+    llm,
     theme: shellTheme,
     relays: previewInfo?.relays ?? [],
     servers: previewInfo?.servers ?? [],
@@ -89,6 +152,7 @@ detail.style.overflowWrap = 'anywhere';
 detail.style.maxHeight = '50vh';
 detail.style.overflowY = 'auto';
 filePicker.onchange = () => choice?.selectFiles?.(Array.from(filePicker.files ?? []));
+let closePrompt: (() => void) | undefined;
 function showPrompt(prompt: HostPrompt | null) {
   choice = prompt;
   filePicker.value = '';
@@ -99,12 +163,13 @@ function showPrompt(prompt: HostPrompt | null) {
   else filePicker.removeAttribute('webkitdirectory');
   if (frame) frame.inert = prompt !== null || settingsOpen;
   if (!prompt) {
-    dialog.close();
+    closePrompt?.();
+    closePrompt = undefined;
     return;
   }
   detail.textContent =
     prompt.kind === 'save'
-      ? `Save ${prompt.value}? It will appear below for download.`
+      ? `Save ${prompt.value}? A Download button will appear when the napplet writes the file.`
       : prompt.value;
   confirm.hidden = prompt.kind === 'link' || prompt.kind === 'files';
   confirm.textContent =
@@ -123,7 +188,7 @@ function showPrompt(prompt: HostPrompt | null) {
   later.hidden = prompt.kind !== 'multiplayer';
   link.hidden = prompt.kind !== 'link';
   if (prompt.kind === 'link') link.href = prompt.value;
-  if (!dialog.open) dialog.showModal();
+  closePrompt ??= presentShellDialog(dialog);
   cancel.focus();
 }
 confirm.onclick = () => choice?.answer(true);
@@ -135,20 +200,12 @@ dialog.oncancel = (event) => {
   choice?.dismiss();
 };
 
+const downloads = fileDownloads(exports);
 function showFiles(files: ExportFile[]) {
-  urls.forEach((url) => URL.revokeObjectURL(url));
-  urls = [];
-  exports.replaceChildren(
-    ...files.map((file) => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(file.blob);
-      urls.push(a.href);
-      a.download = file.name.split('/').pop()!;
-      a.textContent = `${file.name} ↓`;
-      return a;
-    }),
-  );
+  downloads.update(files);
 }
+window.addEventListener('pagehide', () => downloads.close());
+
 const connect = document.querySelector<HTMLButtonElement>('#connect')!;
 connect.onclick = async () => {
   connect.disabled = true;
@@ -180,7 +237,10 @@ document.querySelector<HTMLButtonElement>('#reload')!.onclick = () => {
 };
 async function refresh() {
   try {
-    const response = await fetch('/revision', { cache: 'no-store', signal: lifetime.signal });
+    const response = await fetch(new URL('revision', location.href), {
+      cache: 'no-store',
+      signal: lifetime.signal,
+    });
     const info: PreviewRevision & { error?: string } = await response.json();
     if (!response.ok) throw new Error(info.error ?? 'Could not read local source.');
     if (info.id === loaded) return;
@@ -191,6 +251,7 @@ async function refresh() {
     stage.replaceChildren();
     frame = undefined;
     loaded = info.id;
+    delete document.documentElement.dataset.nappletRevoked;
     status.textContent = 'Verifying preview…';
     const missing = missingDomains(info.requires);
     if (missing.length) throw new Error(`Unsupported required capabilities: ${missing.join(', ')}`);
@@ -202,7 +263,10 @@ async function refresh() {
         declaration = declaredConfig(verifiedHtml);
         return nappletPrelude(shim, declaration);
       },
-      { localUrl: `/artifacts/${info.artifactHash}` },
+      {
+        localUrl: new URL(`artifacts/${info.artifactHash}`, location.href).href,
+        credentials: 'same-origin',
+      },
     );
     frame = document.createElement('iframe');
     frame.title = 'Your napplet';
@@ -213,14 +277,43 @@ async function refresh() {
     // Attach before the child's bootstrap can post shell.ready.
     stage.replaceChildren(frame);
     host = attachNappletHost({
+      llm,
       intent: { workspace: intents.workspace, catalogId: info.intentCatalogId },
       theme: shellTheme,
       backend: info.backend,
+      roomEntry: (() => {
+        const q = new URLSearchParams(location.search);
+        if (
+          !info.backend ||
+          !info.gameAddress ||
+          !info.intentTags.some((t) => t[0] === 'z' && t[1] === 'game') ||
+          !info.intentTags.some((t) => t[0] === 'i' && t[1] === joinConvention) ||
+          info.backend.pubkey !== q.get('provider')
+        )
+          return;
+        const ref = entryRef.safeParse({
+          version: 1,
+          provider: info.backend.pubkey,
+          room: q.get('room'),
+          protocol: q.get('protocol'),
+          napplet: info.gameAddress,
+        });
+        return ref.success ? ref.data : undefined;
+      })(),
       backendIdentity: info.backendIdentity,
       backendAliases: info.backendAliases,
       media: (session) =>
         mediaRoot.render(session ? createElement(MediaControls, { media: session }) : null),
       frame,
+      // NIP-5D replacement evidence. Do not reload automatically: a self-navigating
+      // napplet must not drive a reload loop. Saving or Reload creates a fresh frame.
+      revoked: (reason) => {
+        host = undefined;
+        frame = undefined;
+        stage.replaceChildren();
+        document.documentElement.dataset.nappletRevoked = reason;
+        status.textContent = revocationMessage(reason, 'creator');
+      },
       identity: info.hostIdentity,
       manifestId: info.id,
       relays: info.relays,
@@ -239,6 +332,7 @@ async function refresh() {
       prompt: showPrompt,
       files: showFiles,
       declaration,
+      agentTools: (session) => toolsRoot.render(createElement(AgentToolsControl, { session })),
       configuration: (session) =>
         settingsRoot.render(
           session
@@ -266,6 +360,7 @@ async function refresh() {
 window.addEventListener('pagehide', () => {
   lifetime.abort();
   host?.close();
+  toolsRoot.unmount();
   settingsRoot.unmount();
   mediaRoot.unmount();
   networkRoot.unmount();

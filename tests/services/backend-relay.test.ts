@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrivateKeySigner } from '@contextvm/sdk/signer';
+import { SimplePool, verifyEvent } from 'nostr-tools';
 import { buildRelay } from '../../scripts/relay';
 import { startBackend } from '../../packages/multiplayer/src/service';
 import { CvmConnection } from '../../packages/multiplayer/src/client';
@@ -61,11 +62,27 @@ test('public CVM client reaches the same Khatru relay through its private servic
     expect(result.version).toBe(1);
     expect(result.families).toContain('soy.matchmaking.v1');
     const catalog = await client.request('tools/list');
-    expect(
-      (catalog.tools as any[]).find((tool) => tool.name === 'soy_match_join')._meta[
-        'io.contextvm/common-schema'
-      ].schemaHash,
-    ).toMatch(/^[a-f0-9]{64}$/);
+    const hashes = (
+      catalog.tools as { name: string; _meta: Record<string, { schemaHash: string }> }[]
+    ).map((tool) => ['i', tool._meta['io.contextvm/common-schema'].schemaHash, tool.name]);
+    const hash = hashes.find((tag) => tag[2] === 'soy_room_create')![1];
+    const filter = { kinds: [11317], authors: [service.provider.pubkey] };
+    const lookup = new SimplePool();
+    try {
+      const [byHash, byMarker] = await Promise.all([
+        lookup.querySync([publicRelay], { ...filter, '#i': [hash] }),
+        lookup.querySync([publicRelay], { ...filter, '#k': ['io.contextvm/common-schema'] }),
+      ]);
+      expect(byHash).toHaveLength(1);
+      expect(byMarker[0]?.id).toBe(byHash[0].id);
+      expect(verifyEvent(byHash[0])).toBe(true);
+      expect(byHash[0].tags.filter((t) => t[0] === 'i')).toEqual(hashes);
+      expect(byHash[0].tags.filter((t) => t[0] === 'k')).toEqual([
+        ['k', 'io.contextvm/common-schema'],
+      ]);
+    } finally {
+      lookup.close([publicRelay]);
+    }
   } finally {
     await client?.close();
     await service?.close();

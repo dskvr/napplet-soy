@@ -1,0 +1,130 @@
+diff --git a/dist/prelude.global.js b/dist/prelude.global.js
+--- a/dist/prelude.global.js
++++ b/dist/prelude.global.js
+@@ -342,8 +342,13 @@
+       }
+     }
+   }
++  // Capture transport intrinsics before untrusted napplet scripts can replace them.
++  var postPortMessage = Function.prototype.call.bind(MessagePort.prototype.postMessage);
++  var readMessageData = Function.prototype.call.bind(
++    Object.getOwnPropertyDescriptor(MessageEvent.prototype, "data").get
++  );
+   function sendPortEnvelope(port, message) {
+-    deliverEnvelope((value) => port.postMessage(value), message);
++    deliverEnvelope((value) => postPortMessage(port, value), message);
+   }
+ 
+   // ../nap/dist/chunk-GNKSDV4F.js
+@@ -351,7 +356,7 @@
+   var connection = null;
+   var listeners = /* @__PURE__ */ new Set();
+   function dispatch2(event) {
+-    const message = event.data;
++    const message = readMessageData(event);
+     if (typeof message !== "object" || message === null || typeof message.type !== "string") return;
+     for (const listener of listeners) listener(message);
+   }
+@@ -432,7 +437,11 @@
+     });
+   }
+   function handleDelta(message) {
+-    if ("id" in message || typeof message.requestId !== "string" || typeof message.sequence !== "number" || typeof message.text !== "string") return;
++    if ("id" in message || typeof message.requestId !== "string" || !Number.isSafeInteger(message.sequence) || message.sequence < 0 || !Number.isSafeInteger(message.blockIndex) || message.blockIndex < 0) return;
++    if (!["start", "delta", "end"].includes(message.event) || !["text", "thinking", "toolCall"].includes(message.block)) return;
++    if (message.event === "delta" ? typeof message.text !== "string" : "text" in message) return;
++    const toolStart = message.event === "start" && message.block === "toolCall";
++    if (toolStart ? typeof message.toolCallId !== "string" || !message.toolCallId || typeof message.name !== "string" || !message.name : "toolCallId" in message || "name" in message) return;
+     const entry = pending.get(message.requestId);
+     if (!entry || entry.type !== "llm.generate.result") return;
+     if (message.sequence !== entry.nextSequence) {
+@@ -440,7 +449,10 @@
+       return;
+     }
+     entry.nextSequence += 1;
+-    entry.onDelta?.({ requestId: message.requestId, sequence: message.sequence, text: message.text });
++    const { requestId, sequence, event, block, blockIndex } = message;
++    try { entry.onDelta?.({ requestId, sequence, event, block, blockIndex,
++      ...(event === "delta" ? { text: message.text } : {}),
++      ...(toolStart ? { toolCallId: message.toolCallId, name: message.name } : {}) }); } catch {}
+   }
+   function handleLlmMessage(message) {
+     if (message.type === "llm.delta") {
+@@ -469,6 +481,7 @@
+     return sendRequest("llm.describe", { handle }, REQUEST_TIMEOUT_MS);
+   }
+   function generate(request7, options = {}) {
++    if (options.signal?.aborted) return Promise.reject(new LlmError({ code: "cancelled", message: "Inference cancelled." }));
+     const id = crypto.randomUUID();
+     const promise = sendRequest("llm.generate", { request: request7 }, GENERATE_TIMEOUT_MS, id);
+     const entry = pending.get(id);
+@@ -3921,6 +3934,8 @@
+     "webrtc.open.result",
+     "webrtc.send",
+     "webrtc.send.result",
++    "webrtc.sendBytes",
++    "webrtc.sendBytes.result",
+     "webrtc.close",
+     "webrtc.close.result",
+     "webrtc.event"
+@@ -3984,6 +3999,17 @@
+       (msg) => {
+         if (msg.type === "webrtc.send.result" && !msg.error) return void 0;
+         rejectResult(msg, "webrtc send failed");
++      }
++    );
++  }
++  function sendBytes2(sessionId, bytes) {
++    // No JSON retry here: a timeout leaves delivery unknown.
++    return request2(
++      { type: "webrtc.sendBytes", id: crypto.randomUUID(), sessionId, bytes },
++      "webrtc.sendBytes.result",
++      (msg) => {
++        if (msg.type === "webrtc.sendBytes.result" && !msg.error) return void 0;
++        rejectResult(msg, "webrtc sendBytes failed");
+       }
+     );
+   }
+@@ -5345,6 +5371,7 @@
+       napplet.webrtc = {
+         open: open3,
+         send: send2,
++        sendBytes: sendBytes2,
+         close: close2,
+         onEvent: onEvent2
+       };
+@@ -5596,7 +5623,33 @@
+     return options.domains.filter((domain) => KNOWN_DOMAINS.has(domain));
+   }
+   function installNappletRuntimePrelude(options) {
+-    return installNappletGlobal({ domains: normalizePreludeDomains(options) });
++    const napplet = installNappletGlobal({ domains: normalizePreludeDomains(options) });
++    // Explicit experimental resource profile. Only its envelopes cross this
++    // adapter; neither the MessagePort nor a general transport is exposed.
++    if (napplet.resource && typeof options.resourceProfile === "function" && !napplet.resource.soyFips) {
++      const binding = options.resourceProfile(
++        message => {
++          if (message?.type === "resource.fips" && message.profile === "soy.fips/1") postToShell(message);
++        },
++        callback => onShellMessage(message => {
++          if (["resource.fips.result", "resource.fips.changed"].includes(message.type) && message.profile === "soy.fips/1") callback(message);
++        })
++      );
++      Object.defineProperty(napplet.resource, "soyFips", { value: binding, enumerable: true });
++    }
++    // Experimental tool registration stays on the same private NIP-5D port.
++    if (typeof options.toolProfile === "function" && !napplet.webmcp) {
++      const binding = options.toolProfile(
++        message => {
++          if (["webmcp.register", "webmcp.unregister", "webmcp.reset", "webmcp.complete", "webmcp.progress"].includes(message?.type) && message.profile === "soy.webmcp/1") postToShell(message);
++        },
++        callback => onShellMessage(message => {
++          if (["webmcp.register.result", "webmcp.unregister.result", "webmcp.reset.result", "webmcp.invoke", "webmcp.cancel", "webmcp.changed"].includes(message.type) && message.profile === "soy.webmcp/1") callback(message);
++        })
++      );
++      Object.defineProperty(napplet, "webmcp", { value: binding, enumerable: true });
++    }
++    return napplet;
+   }
+   function renderNappletRuntimePreludeCall(options) {
+     return `globalThis.NappletShimPrelude.install(${JSON.stringify({

@@ -82,6 +82,7 @@ export { validateRelease } from './manifest';
 export { enableWasmVerification, verifySignature } from './verify';
 
 export const gallerySearchSchema = z.object({
+  gamesOnly: z.boolean().optional().catch(undefined),
   tag: z.string().max(256).transform(normalizeTopic).catch(''),
   sort: z.enum(['curated', 'new', 'updated', 'featured']).catch('new'),
   q: z.string().max(100).catch(''),

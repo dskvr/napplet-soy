@@ -1,11 +1,11 @@
-# NAP-GAMEPAD — shell-brokered controller input (merged upstream draft)
+# NAP-GAMEPAD — shell-brokered controller input (proposed upstream draft)
 
-Status: **merged upstream draft**, pinned to [NAP-GAMEPAD at
-`19de5ce1cea40cd4c76089cdd8126e9f87648049`](https://github.com/napplet/naps/blob/19de5ce1cea40cd4c76089cdd8126e9f87648049/naps/NAP-GAMEPAD.md)
-([PR #108](https://github.com/napplet/naps/pull/108)). Reviewed against the merged
-contract on 2026-10-15. Implemented in source; not deployed or released.
-The pinned shim 0.31.0 has no gamepad binding, so this host supplies the standard
-binding in its prelude. No SDK or authoritative NIP-5D pin changes.
+Status: **proposed upstream draft**, pinned to [NAP-GAMEPAD at
+`0b28f77e3dfa0f07dd7c0f9d61a7090ee99f3a5e`](https://github.com/napplet/naps/blob/0b28f77e3dfa0f07dd7c0f9d61a7090ee99f3a5e/naps/NAP-GAMEPAD.md)
+([draft PR #130](https://github.com/napplet/naps/pull/130)). The pinned
+@napplet/shim 0.35.0 supplies the standard gamepad binding over the private
+NIP-5D MessagePort. The host supplies focus-gated snapshots and a compatibility
+reader for games using the browser Gamepad API.
 
 ## Why
 
@@ -15,8 +15,7 @@ Before this change, Chromium let every opaque `allow-scripts` player frame call
 presses. Only the creator helper voluntarily ignored input without focus.
 
 The shell now owns the only native reader. Player frames are denied the browser API
-by Permissions-Policy (`gamepad 'none'` in `PLAYER_ALLOW`). Each frame receives a
-snapshot only while that frame has input focus.
+by Permissions-Policy (`gamepad 'none'` in `PLAYER_ALLOW`). Each frame receives live input while focused and neutral snapshots otherwise.
 
 ## Wire messages
 
@@ -76,12 +75,12 @@ Denying the `gamepad` Permissions-Policy feature does not remove the API from a
 frame. In Chromium 153 the frame still has the native
 `Navigator.prototype.getGamepads`, `Gamepad`, `GamepadButton`, `GamepadEvent` and
 `ongamepadconnected`; only the call throws `SecurityError`. The host prelude
-(`gamepadPrelude()` in `packages/runtime/src/prelude.ts`) runs before creator scripts
+(`nativeGamepadCompatibility()` in `packages/runtime/src/prelude.ts`) runs before creator scripts
 and follows these rules:
 
 - **It replaces only a denied API.** It installs only when the native `getGamepads`
   exists and throws `SecurityError`. If the host allows native access, or the browser
-  has no Gamepad API, it leaves the native API untouched. The standard binding still subscribes.
+  has no Gamepad API, it leaves the native API untouched. The standard binding subscribes on first use.
 - **It replaces exactly one property: `Navigator.prototype.getGamepads`.** The
   replacement keeps the native writable/enumerable/configurable attributes, the name
   `getGamepads`, `length` 0, and the `TypeError` for a non-`Navigator` receiver.
@@ -145,47 +144,3 @@ Remaining observable differences, verified in Chromium 153:
 
 Physical controllers and Safari/Firefox behavior are not yet verified (see
 [CONTROLLERS.md](CONTROLLERS.md)).
-
-
-### Merged-contract review evidence — 2026-10-15
-
-- Merged current `origin/main` without conflicts.
-- `bun run check` with Git 2.55.0: 736 tests passed, zero failures; typecheck passed.
-  The system Git 2.34.1 cannot run the existing merge-tree tests, which require
-  Git 2.38 or newer.
-- Chromium: six tests passed across the gamepad shim and real preview/controller
-  tester, including standard binding installation without a native Gamepad API.
-- Web production build passed.
-- `bun run check:nix` passed: package realization, forced rebuilds and x86_64
-  Linux flake/VM regressions, including upstream conformance. The VM used TCG
-  fallback because KVM access was denied. Other architectures were not checked.
-- Review fixes: install the standard binding independently of native replacement;
-  report no live focus when unavailable; observe frame focus changes immediately;
-  honor unsubscribe after rate limiting; suppress helper release actions on blur.
-- Physical USB/Bluetooth controllers and Safari/Firefox remain unverified.
-
-
-### Iframe-boundary follow-up review — 2026-10-15
-
-The review found and fixed a CLI intent-launch path introduced by the main merge:
-intent targets now use `PLAYER_ALLOW`, including native gamepad denial, just like
-the website player, ordinary CLI preview, dynamic-backend demo and controller
-tester. The tester now creates the namespace before installing the standard NAP
-binding as well as the native compatibility shim.
-
-The real Chromium intent-launch regression saves the original native reader
-before the prelude executes and checks that it still throws `SecurityError`.
-Both `window.napplet.gamepad.getGamepads()` and the compatibility
-`navigator.getGamepads()` then receive the same host-brokered values, becoming
-neutral after focus loss. The tester regression checks its NAP binding and denied
-Permissions-Policy directly.
-
-The security boundary is browser-enforced Permissions-Policy, not the JavaScript
-shim. The shim preserves library access patterns over NAP snapshots; it cannot
-provide native-device isolation in a browser that ignores that policy. Such
-browsers remain outside the verified isolation claim.
-
-
-Follow-up verification: typecheck and all 18 targeted broker/helper and Chromium
-tests passed. `bun run check:nix` passed realization, forced rebuilds and x86_64
-Linux VM regressions again (TCG fallback; other architectures unchecked).

@@ -15,7 +15,7 @@ does not build, sign or publish its own deployment event.
   "description": "Draw a racetrack and race your friends' creations.",
   "requires": ["storage"],
   "optionalDomains": ["theme", "identity"],
-  "archetypes": ["track", "editor"],
+  "archetypes": ["game", "track", "editor"],
   "intents": [{ "intent": "napplet:track/edit", "parameters": ["track", "mode"] }],
   "icon": { "file": "assets/track-icon.png", "mime": "image/png" }
 }
@@ -40,7 +40,7 @@ For example, this complete `metadata.json` works with `soyli project set metadat
   "topics": ["racing", "editor"],
   "requires": ["storage"],
   "optionalDomains": ["theme", "identity"],
-  "archetypes": ["track", "editor"],
+  "archetypes": ["game", "track", "editor"],
   "intents": [{ "intent": "napplet:track/edit", "parameters": ["track", "mode"] }]
 }
 ```
@@ -72,6 +72,13 @@ Rust and single-file projects can use `napplet.json.requires`. Declare only
 domains essential to the core experience. Missing optional domains must degrade
 gracefully. Declarations never grant access: inspect `window.napplet.<domain>`
 and handle the host's actual operation results.
+
+Do not bundle `@napplet/shim` or post to `window.parent` yourself. The host's
+bootstrap hands a private MessagePort to the shell before your scripts run, and all
+NAP traffic uses it. Under NIP-5D, any other window-level message, a second
+handoff, a reload or a navigation away stops the napplet. `soyli check` reports this
+as `NAPPLET_REVOKED` with the cause. The bootstrap also removes the `RTC*`
+constructors; use the injected `window.napplet.webrtc` domain for peer connections.
 
 Archetypes are descriptive labels, not privileges or categories enforced by the
 host. An intent is a queryless convention identity, such as `napplet:track/edit`;
@@ -160,3 +167,16 @@ current `/n/` link; a superseded `/r/` revision cannot replace a newer release.
 Immutable snapshots are deliberately not converted: their new independent
 identity would not preserve the old thread/storage. Old links remain playable
 through the legacy reader without any migration.
+
+## Help people find the right kind of napplet
+
+Choose a coarse `archetypes` label for the primary experience: `game`, `utility`, or
+`digital-art`, for example. These are examples, not an exhaustive registry. Keep
+specific `topics` such as racing or generative-art (including existing game tags).
+Publishers write `z` and `t` separately. Archetypes neither grant capabilities
+nor imply that a game is online. Only declare an intent that the app handles.
+
+The [selected NIP-5D amendment](https://github.com/dskvr/nips/blob/f60550c3409d6d81a875088ec83e660571e10504/5D.md#shell-handlers)
+adds optional NIP-89 shell handler advertisements. A shell's bare `N` tags
+are hints, never grants. Napplet projects do not publish these tags. A missing
+handler advertisement must not change playback.

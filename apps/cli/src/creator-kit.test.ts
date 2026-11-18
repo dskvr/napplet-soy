@@ -138,12 +138,25 @@ test('assembled authoring guidance chooses scene and UI direction without confli
 
 test('shipped tooling guidance follows soyLI setup and allows backend and scenario source', () => {
   const files = { ...boilerplateFiles('tooling'), ...creatorSkills() };
+  for (const root of ['.agents', '.claude']) {
+    const make = files[`${root}/skills/napplet-make/SKILL.md`];
+    expect(make).not.toContain('napplet create <dir>');
+    expect(make).not.toContain('command -v paja');
+    expect(make).not.toContain('Paja preview URL reported');
+    expect(make).toContain('surrounding studio owns the preview');
+    expect(make).toContain('soyli run test:conformance');
+  }
   const build = files['.agents/skills/napplet-build/SKILL.md'];
   expect(build).not.toContain('napplet create my-napplet');
   expect(build).not.toContain('napplet paja --');
   expect(build).toContain('soyli setup');
   expect(build).toContain('`backend/**`');
   expect(build).toContain('`tests/**`');
+  expect(build).toContain('independent shell');
+  expect(files['docs/napplet-space.md']).toContain("owner: 'napplet'");
+  expect(files['docs/napplet-space.md']).toContain('Do not continue unregistered sound');
+  expect(files['docs/napplet-space.md']).toContain('without inputs, interaction');
+  expect(files['docs/napplet-space.md']).not.toContain('Streams stop at 128 MiB');
   for (const path of ['README.md', 'AGENTS.md'])
     expect(files[path]).not.toContain('npx skills add napplet/napplet');
   expect(files['docs/napplet-backend.md']).toContain('never force-add');
@@ -280,7 +293,7 @@ test('game-facing skills explain the NAP-GAMEPAD draft and the getGamepads shim'
   ]) {
     const body = installed[`.agents/skills/${name}/SKILL.md`].replace(/\s+/g, ' ');
     for (const part of [
-      'https://github.com/napplet/naps/pull/108',
+      'https://github.com/napplet/naps/pull/130',
       'Navigator.prototype.getGamepads',
       'gamepad.state',
       'window.napplet.gamepad',
@@ -292,6 +305,21 @@ test('game-facing skills explain the NAP-GAMEPAD draft and the getGamepads shim'
   }
   for (const name of ['napplet-ui', 'napplet-interop'])
     expect(installed[`.agents/skills/${name}/SKILL.md`]).not.toContain('NAP-GAMEPAD');
-  expect(installed['docs/napplet-controllers.md']).toContain('napplet/naps/pull/108');
-  expect(installed['docs/napplet-space.md']).toContain('napplet/naps/pull/108');
+  expect(installed['docs/napplet-controllers.md']).toContain('napplet/naps/pull/130');
+  expect(installed['docs/napplet-space.md']).toContain('napplet/naps/pull/130');
+});
+
+test('FIPS authoring ships a network-free adapter and accurately declares its experimental boundary', async () => {
+  const directory = await mkdtemp(join(root, 'fips-guidance-'));
+  const installed = await installCreatorSkills(directory);
+  expect(installed.updated).toContain('docs/napplet-fips.md');
+  const guide = await readFile(join(directory, 'docs/napplet-fips.md'), 'utf8');
+  expect(guide).toContain('not a\nstandard NAP');
+  expect(guide).toContain('without requiring a login');
+  const helper = await readFile(join(directory, 'docs/examples/fips-resource-client.ts'), 'utf8');
+  expect(helper).toContain('soy.fips/1');
+  expect(helper).not.toMatch(/\b(fetch|WebSocket|EventSource)\s*\(/);
+  expect(await readFile(join(directory, 'docs/napplet-space.md'), 'utf8')).toContain(
+    'docs/napplet-fips.md',
+  );
 });
