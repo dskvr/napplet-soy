@@ -43,6 +43,7 @@ export function hostGamepadSlots() {
  */
 function nativeGamepadCompatibility(slots = hostGamepadSlots()) {
   return `(() => {
+  if (typeof Navigator === 'undefined') return;
   const native = Navigator.prototype.getGamepads;
   let replaceNative = false;
   if (typeof native === 'function') {
