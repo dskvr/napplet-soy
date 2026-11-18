@@ -19,6 +19,7 @@ export const RUNTIME_DOMAINS = [
   'media',
   'cvm',
   'webrtc',
+  'gamepad',
 ] as const;
 export const RUNTIME_PROFILE = 'space-playback-9-llm-cvm-payments';
 
@@ -69,6 +70,7 @@ export const HOST_REQUESTS = new Set(
       'report',
     ],
     link: ['open'],
+    gamepad: ['subscribe', 'unsubscribe'],
     fs: [
       'info',
       'pickFile',

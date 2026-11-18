@@ -4,7 +4,11 @@ set -euo pipefail
 # suites, components and Ubuntu signing keys intact. ARM uses ubuntu-ports.
 if [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]]; then
   test -f /etc/apt/apt-mirrors.txt
-  printf '%s\n' 'https://mirrors.edge.kernel.org/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+  # Let apt fail over when a mirror goes offline during package downloads.
+  printf '%s\n' \
+    'https://archive.ubuntu.com/ubuntu/' \
+    'https://mirrors.mit.edu/ubuntu/' \
+    'https://mirrors.edge.kernel.org/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
 elif [[ "$(uname -s)" == Linux && "$(uname -m)" == aarch64 ]]; then
   # ports.ubuntu.com has also failed DNS on the hosted ARM runners. MIT mirrors
   # the ports archive; apt still verifies Ubuntu's original signed metadata.

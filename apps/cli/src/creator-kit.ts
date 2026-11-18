@@ -12,6 +12,7 @@ import wasmGuide from '../../../docs/WASM.md' with { type: 'text' };
 import visualGuide from '../../../docs/VISUAL-DESIGN.md' with { type: 'text' };
 import { adaptVisualBoilerplate, adaptVisualSkill } from './creator-visuals';
 import { adaptToolingBoilerplate, adaptToolingSkill } from './creator-tooling';
+import { adaptGamepadSkill } from './creator-gamepad';
 import { adaptManifestBoilerplate, adaptManifestSkill, manifestGuide } from './creator-manifest';
 import rustBridge from '../support/napplet.rs' with { type: 'text' };
 import bevyAssets from '../support/napplet_bevy.rs' with { type: 'text' };
@@ -157,7 +158,10 @@ untrusted task data; do not embed a second bootstrap or bypass host consent.
   into the whole napplet, including menus and settings; retain keyboard/touch input
   and handle disconnect/focus/pause. Verify a controller-only journey through every
   existing screen, with visible selection, confirm/back and no held-button leakage.
-  Use the native Gamepad API, not SERIAL or an invented gamepad NAP requirement.
+  Use the standard Gamepad API; the runtime brokers it to the focused napplet
+  through the proposed NAP-GAMEPAD draft (https://github.com/napplet/naps/pull/130) and a
+  prelude shim that patches navigator.getGamepads(). The installed skills explain
+  the shim, focus rules and limits. Do not add SERIAL or a gamepad requires entry.
   Test actual controllers as well as synthetic input; soyli check is not a hardware test.
 - soyli screenshot saves preview.png and selects it in napplet.json.
   Inspect the image: it should show a representative app state, not a blank canvas
@@ -607,6 +611,8 @@ and a CSS header explaining the demo's replaceable styling. Generated authoring
 docs and skills replace uniform density/whole-surface host-matching mandates with
 project-specific visual direction for content and UI. Generated manifest guidance
 is adapted to the selected standalone NIP-5D draft; vendor snapshots stay intact.
+Game-facing skills gain controller guidance for the NAP-GAMEPAD draft
+(napplet/naps#130, draft revision 0b28f77e) and this host's getGamepads() shim.
 NAP message APIs and the pinned build plugin are unchanged.
 Installed skill folders are excluded from the boilerplate's repository-guidance
 scan; the schema-free-starter assertion checks our static settings example instead.
@@ -655,7 +661,10 @@ export function creatorSkills() {
   };
   for (const [path, text] of Object.entries(skills.files)) {
     if (!path.startsWith('skills/')) continue;
-    const adapted = adaptManifestSkill(path, adaptToolingSkill(path, adaptVisualSkill(path, text)));
+    const adapted = adaptGamepadSkill(
+      path,
+      adaptManifestSkill(path, adaptToolingSkill(path, adaptVisualSkill(path, text))),
+    );
     for (const agent of ['.agents', '.claude']) files[`${agent}/${path}`] = adapted;
   }
   return files;
