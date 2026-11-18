@@ -1,3 +1,4 @@
+import { entryRef, joinConvention } from '../../../../packages/multiplayer/src/directory';
 import { presentShellDialog } from '../../../../packages/runtime/src/shell-ui';
 import { fileDownloads } from '../../../../packages/runtime/src/file-downloads';
 import { inferenceService } from '../../../../packages/runtime/src/llm-service';
@@ -280,6 +281,25 @@ async function refresh() {
       intent: { workspace: intents.workspace, catalogId: info.intentCatalogId },
       theme: shellTheme,
       backend: info.backend,
+      roomEntry: (() => {
+        const q = new URLSearchParams(location.search);
+        if (
+          !info.backend ||
+          !info.gameAddress ||
+          !info.intentTags.some((t) => t[0] === 'z' && t[1] === 'game') ||
+          !info.intentTags.some((t) => t[0] === 'i' && t[1] === joinConvention) ||
+          info.backend.pubkey !== q.get('provider')
+        )
+          return;
+        const ref = entryRef.safeParse({
+          version: 1,
+          provider: info.backend.pubkey,
+          room: q.get('room'),
+          protocol: q.get('protocol'),
+          napplet: info.gameAddress,
+        });
+        return ref.success ? ref.data : undefined;
+      })(),
       backendIdentity: info.backendIdentity,
       backendAliases: info.backendAliases,
       media: (session) =>

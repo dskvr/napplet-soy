@@ -554,3 +554,17 @@ private channel. It is not an accepted NAP and does not change the NIP-5D author
 or sandbox. Registration starts withheld; shell/internal and native browser-agent
 consent are separate. See [WEBMCP.md](WEBMCP.md) for wire semantics, limits,
 revocation and verification boundaries. Ordinary playback never requires it.
+
+## Shell handlers and public game rooms (2026-11-18)
+
+Reviewed [dskvr/nips #13](https://github.com/dskvr/nips/pull/13), merged as
+`f60550c3409d6d81a875088ec83e660571e10504` on the selected NIP-5D track.
+Publishing a kind 31990 shell handler is optional; napplet.soy does not need or
+consume such a record for playback. If implemented, `N` is only an advertisement;
+check all manifest `R` locally even after a relay `#N` match. Missing or
+malformed handler records never suppress the normal verified playback path.
+
+Gamegrid accepts `z:game` or a normalized `t:game` before ranking and pagination.
+The [public room contract](BACKEND-CREATOR.md#playing-now-opt-in-public-room-directory)
+is independent of that taxonomy. A room link is a rendezvous for one provider,
+game and protocol, not a permission grant or a new NIP-5D tag.

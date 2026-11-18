@@ -34,7 +34,12 @@ type SearchableNapplet = {
   optionalDomains?: readonly string[];
 };
 
+export function isGame(entry: Pick<SearchableNapplet, 'archetypes' | 'topics'>) {
+  return entry.archetypes?.includes('game') || entry.topics.includes('game');
+}
+
 export type DiscoverySearch = {
+  gamesOnly?: boolean;
   archetype?: string;
   intent?: string;
   requiredDomain?: string;
@@ -48,6 +53,7 @@ export function matchesGallery(
 ) {
   const query = search.q.trim().toLowerCase();
   return (
+    (!search.gamesOnly || isGame(napplet)) &&
     (!search.tag || napplet.topics.includes(search.tag)) &&
     (!search.archetype || !!napplet.archetypes?.includes(search.archetype)) &&
     (!search.intent || !!napplet.intents?.some((item) => item.intent === search.intent)) &&

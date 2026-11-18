@@ -345,10 +345,15 @@ export function queryCatalog(
   if (
     known.length ||
     (search &&
-      (search.archetype || search.intent || search.requiredDomain || search.optionalDomain))
+      (search.gamesOnly ||
+        search.archetype ||
+        search.intent ||
+        search.requiredDomain ||
+        search.optionalDomain))
   ) {
     const key = JSON.stringify([
       author,
+      search?.gamesOnly,
       search?.archetype,
       search?.intent,
       search?.requiredDomain,
@@ -381,17 +386,22 @@ async function refreshCatalog(
 ) {
   if (!author && !search && !known.length && catalogFresh > Date.now() - 30000)
     return [...entries.values()].filter(manifestEntry);
-  const filters: Filter[] = search
-    ? targetedDiscoveryFilters(
-        {
-          archetypes: search.archetype ? [search.archetype] : [],
-          intents: search.intent ? [search.intent] : [],
-          requiredDomains: search.requiredDomain ? [search.requiredDomain] : [],
-          optionalDomains: search.optionalDomain ? [search.optionalDomain] : [],
-        },
-        { limit: 300, legacyRequirements: true },
-      ).fallback
-    : [{ kinds: [35129, 15129, 5129], limit: 300 }];
+  const filters: Filter[] = search?.gamesOnly
+    ? [
+        { kinds: [35129, 15129, 5129], '#z': ['game'], limit: 300 },
+        { kinds: [35129, 15129, 5129], '#t': ['game'], limit: 300 },
+      ]
+    : search
+      ? targetedDiscoveryFilters(
+          {
+            archetypes: search.archetype ? [search.archetype] : [],
+            intents: search.intent ? [search.intent] : [],
+            requiredDomains: search.requiredDomain ? [search.requiredDomain] : [],
+            optionalDomains: search.optionalDomain ? [search.optionalDomain] : [],
+          },
+          { limit: 300, legacyRequirements: true },
+        ).fallback
+      : [{ kinds: [35129, 15129, 5129], limit: 300 }];
   // INTENT discovery must also observe revisions that remove/change their
   // advertised role. Exact coordinates avoid depending on the global feed limit.
   for (const event of known.slice(0, 100)) {

@@ -17,6 +17,7 @@ import { GallerySocialProvider, SocialRankings } from '@/components/gallery-soci
 import { useNostr } from '@/components/nostr-provider';
 import { Button } from '@/components/ui/button';
 import { publicLink } from '../../../../packages/backend/src/public-model';
+import { PlayingNow } from '@/components/playing-now';
 import { FeaturedHero } from '@/components/featured-hero';
 import { StarterCommand } from '@/components/starter-command';
 import { SoyliBenefits, SoyliIdentity } from '@/components/soyli-intro';
@@ -184,6 +185,12 @@ function Gallery() {
           }
         />
       </section>
+      {!search.q &&
+        !search.tag &&
+        !search.archetype &&
+        !search.intent &&
+        !search.requiredDomain &&
+        !search.optionalDomain && <PlayingNow />}
       <CollaborationStory />
       <section id="explore" className="explore-section" aria-label="Explore napplets">
         {refresh}

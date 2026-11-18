@@ -1,3 +1,4 @@
+import { verifiedRoomEntry } from '@/lib/playing-now';
 import { fileDownloads } from '../../../../packages/runtime/src/file-downloads';
 import { presentShellDialog } from '../../../../packages/runtime/src/shell-ui';
 import { useWallet } from './wallet/wallet-provider';
@@ -211,6 +212,9 @@ export function Player({
         escape: () => escapeCurrent.current(),
         theme: shellTheme,
         backend: reviewScope ? undefined : backendProvider(),
+        roomEntry: reviewScope
+          ? undefined
+          : verifiedRoomEntry(location.href, release.manifest, backendProvider()?.pubkey),
         frame: node,
         identity: reviewScope
           ? `proposal:${reviewScope}:${release.manifest.id}`
