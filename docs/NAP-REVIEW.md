@@ -372,7 +372,7 @@ return creation errors. See [MEDIA.md](MEDIA.md) for remaining modes and verific
 
 The [runtime domain registry](../packages/runtime/src/capabilities.ts) advertises
 `shell`, `identity`, `storage`, `theme`, `resource`, `relay`, `outbox`, `common`,
-`link`, `fs`, `config` and, in unreleased source, the merged upstream `gamepad` draft. Several write operations are denied by current policy; domain
+`link`, `fs`, `config` and the proposed upstream `gamepad` draft. Several write operations are denied by current policy; domain
 presence is not permission for every operation. The upstream
 [shim integration](../packages/runtime/src/prelude.ts) and
 [host dispatcher](../packages/runtime/src/host.ts) are shared by web and CLI previews.

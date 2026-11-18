@@ -6,10 +6,8 @@ dependency-free input helper for creators. Ordinary USB/Bluetooth gamepads use t
 account or `requires` entry is needed. Existing games must explicitly wire their
 actions to input.
 
-**Isolation (unreleased source after 0.25.3).** Player frames can no longer read
-controllers directly. The runtime page is the only native reader, and it passes input
-only to the napplet that has focus (merged upstream [NAP-GAMEPAD draft](NAP-GAMEPAD.md), merged
-upstream as [napplet/naps#130](https://github.com/napplet/naps/pull/130)). A shim
+**Controller focus.** The shell reads the controllers and passes live input to the
+focused napplet through the [NAP-GAMEPAD proposal](https://github.com/napplet/naps/pull/130). A shim
 injected before your code keeps `navigator.getGamepads()` and the
 `gamepadconnected`/`gamepaddisconnected` events working, so existing games and this
 helper need no changes. Click a napplet to give it the controllers. Input arrives
