@@ -18,6 +18,8 @@ on:
       - 'tests/services/managed-boilerplate.test.ts'
       - 'tests/services/packaged-cli.test.ts'
       - 'tests/services/asset-manager.test.ts'
+      - 'tests/services/gamepad-*.test.ts'
+      - 'tests/services/controllers.test.ts'
       - 'package.json'
       - 'bun.lock'
   workflow_dispatch:
@@ -48,11 +50,12 @@ jobs:
         id: release
         run: bun scripts/cli-release-check.ts
       - run: bun run check
-      - name: Verify INTENT through the real browser shim and relay discovery
+      - name: Verify intent discovery and gamepad focus through the real browser shim
         run: |
           bash .github/scripts/ubuntu-mirror.sh
           bunx playwright install --with-deps chromium
           bun test tests/services/intent-browser.test.ts
+          bun test tests/services/gamepad-shim.test.ts tests/services/gamepad-intent.test.ts tests/services/controllers.test.ts
 
   build:
     needs: check
