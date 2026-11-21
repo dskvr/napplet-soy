@@ -93,7 +93,7 @@ diff --git a/dist/prelude.global.js b/dist/prelude.global.js
          close: close2,
          onEvent: onEvent2
        };
-@@ -5596,7 +5623,33 @@
+@@ -5596,7 +5623,55 @@
      return options.domains.filter((domain) => KNOWN_DOMAINS.has(domain));
    }
    function installNappletRuntimePrelude(options) {
@@ -123,6 +123,28 @@ diff --git a/dist/prelude.global.js b/dist/prelude.global.js
 +        })
 +      );
 +      Object.defineProperty(napplet, "webmcp", { value: binding, enumerable: true });
++    }
++    if (options.mouseCapture && !napplet.soyMouse) {
++      let current;
++      Object.defineProperty(napplet, "soyMouse", { value: Object.freeze({
++        offer(callback) {
++          if (typeof callback !== "function") throw new TypeError("Mouse listener required");
++          current?.();
++          const remove = onShellMessage(m => {
++            if (m.profile === "soy.mouse/1" && (m.type === "mouse.input" || m.type === "mouse.state"))
++              callback(m);
++          });
++          const close = () => {
++            if (current !== close) return;
++            current = undefined;
++            remove();
++            postToShell({ type: "mouse.withdraw", profile: "soy.mouse/1" });
++          };
++          current = close;
++          postToShell({ type: "mouse.offer", profile: "soy.mouse/1" });
++          return Object.freeze({ close });
++        }
++      }) });
 +    }
 +    return napplet;
    }

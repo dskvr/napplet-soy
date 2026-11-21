@@ -205,6 +205,22 @@ test('game keys and live sessions survive tab switches in the preview and websit
       await page.keyboard.press('ArrowUp');
       await frame.locator('#distance').filter({ hasText: '2' }).waitFor({ timeout: 3000 });
       if (url.startsWith(origin)) {
+        // The Escape that releases a captured mouse belongs to the game.
+        await page.evaluate(() => {
+          Object.defineProperty(document, 'pointerLockElement', {
+            configurable: true,
+            value: document.querySelector('iframe'),
+          });
+          document.dispatchEvent(new Event('pointerlockchange'));
+        });
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => {
+          Reflect.deleteProperty(document, 'pointerLockElement');
+          document.dispatchEvent(new Event('pointerlockchange'));
+        });
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+        expect(new URL(page.url()).pathname.endsWith('/play')).toBe(true);
         // Native fullscreen is a separate layer; the ordinary /play route uses CSS expansion.
         await page.keyboard.press('Escape');
         await page.waitForURL((u) => !u.pathname.endsWith('/play'), { timeout: 3000 });

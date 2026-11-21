@@ -345,3 +345,20 @@ browser coverage requires `bun run build`). The real-host test failed before the
 fix and passes with arrow/WASD movement, text editing, unregister/reload, required
 capability admission and Escape exit with retained game state. Deployment evidence
 is tracked separately from implementation.
+
+### Relative mouse input for games
+
+In the public player and soyLI local preview, a game can offer **Capture mouse** during
+play. Clicking the shell button locks the cursor and lets players turn past either edge
+of the screen. Esc releases it. Focus loss, a blocking dialog, account changes, and
+closing the player also release capture. The game receives a state change so it can
+pause. Keyboard focus stays inside the game.
+
+This optional Soy extension (`soy.mouse/1`) is independent of the NIP-5D sandbox.
+Feature-detect `window.napplet?.soyMouse`. Call `offer(listener)` at the start of play
+and call the returned handle's `close()` when leaving play. The listener receives
+`mouse.state` with `captured`, then `mouse.input` with relative `dx`, `dy` and a
+`buttons` mask (primary 1, secondary 2). Motion is combined once per animation frame
+and clamped to ±8192 per axis per batch. Button transitions flush immediately.
+A game must remain usable if the API is absent, capture is declined or the browser
+cannot lock the pointer. Review frames do not offer capture.

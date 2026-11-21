@@ -72,8 +72,19 @@ export function usePlayerPresentation(
       wasNative = native;
       setFullscreen(native);
     };
+    let wasLocked = false;
+    const lockChanged = () => {
+      const locked =
+        !!document.pointerLockElement && !!wrapper.current?.contains(document.pointerLockElement);
+      if (wasLocked && !locked) lastNativeExit.current = performance.now();
+      wasLocked = locked;
+    };
+    document.addEventListener('pointerlockchange', lockChanged);
     document.addEventListener('fullscreenchange', changed);
-    return () => document.removeEventListener('fullscreenchange', changed);
+    return () => {
+      document.removeEventListener('pointerlockchange', lockChanged);
+      document.removeEventListener('fullscreenchange', changed);
+    };
   }, [wrapper, restoreScroll]);
 
   useLayoutEffect(() => {
@@ -122,6 +133,7 @@ export function usePlayerPresentation(
       modalOpen ||
       hasShellDialog() ||
       document.fullscreenElement ||
+      document.pointerLockElement ||
       performance.now() - lastNativeExit.current <= 250
     )
       return false;
