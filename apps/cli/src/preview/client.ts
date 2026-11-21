@@ -261,7 +261,7 @@ async function refresh() {
       lifetime.signal,
       (verifiedHtml) => {
         declaration = declaredConfig(verifiedHtml);
-        return nappletPrelude(shim, declaration);
+        return nappletPrelude(shim, declaration, undefined, true);
       },
       {
         localUrl: new URL(`artifacts/${info.artifactHash}`, location.href).href,
@@ -277,6 +277,7 @@ async function refresh() {
     // Attach before the child's bootstrap can post shell.ready.
     stage.replaceChildren(frame);
     host = attachNappletHost({
+      mouseSurface: frame.parentElement ?? undefined,
       llm,
       intent: { workspace: intents.workspace, catalogId: info.intentCatalogId },
       theme: shellTheme,

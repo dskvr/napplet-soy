@@ -1,3 +1,4 @@
+import { createMouseCapture, mouseProfile } from './mouse-capture';
 import { NappletTools } from './webmcp/session';
 import { shellActivity } from './shell-ui';
 import { fipsHost } from './fips/host';
@@ -56,6 +57,7 @@ export type HostOptions = {
   /** Disable even external-wallet checkout in untrusted review previews. */
   disableCvmPayments?: boolean;
   frame: HTMLIFrameElement;
+  mouseSurface?: HTMLElement;
   identity: string;
   manifestId: string;
   relays: string[];
@@ -574,6 +576,7 @@ export function attachNappletHost(options: HostOptions) {
     focused: () => document.activeElement === options.frame,
   });
   options.configuration?.(config);
+  const mouse = options.mouseSurface && createMouseCapture(options.frame, options.mouseSurface, send);
   const gamepad = new NappletGamepad({ frame: options.frame, send });
   const keys = new NappletKeys({
     send,
@@ -598,6 +601,11 @@ export function attachNappletHost(options: HostOptions) {
     const parsed = envelope.safeParse(data);
     if (!parsed.success) return;
     const message = parsed.data;
+    if (message.profile === mouseProfile && Object.keys(message).length === 2) {
+      if (message.type === 'mouse.offer') mouse?.offer();
+      else if (message.type === 'mouse.withdraw') mouse?.withdraw();
+      return;
+    }
     if (message.type === 'resource.fips') {
       account.fips.handle(message);
       return;
@@ -908,6 +916,7 @@ export function attachNappletHost(options: HostOptions) {
     window.removeEventListener('message', windowListener);
     options.frame.removeEventListener?.('load', loadListener);
     account.close('Player closed');
+    mouse?.close();
     gamepad.close();
     config.close();
     keys.close();
@@ -922,6 +931,7 @@ export function attachNappletHost(options: HostOptions) {
     diagnostics: () => (alive ? account.diagnostics() : Promise.resolve([])),
     updateIdentity(pubkey: string | null) {
       if (!alive || account.pubkey === pubkey) return;
+      mouse?.withdraw();
       account.close('Identity changed');
       options.files([]);
       account = createAccount(pubkey);

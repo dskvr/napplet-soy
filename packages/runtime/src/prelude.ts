@@ -125,6 +125,7 @@ export function nappletPrelude(
   shim: string,
   declaration?: { schema?: unknown },
   slots = hostGamepadSlots(),
+  mouseCapture = false,
 ) {
   let schema = null;
   try {
@@ -149,6 +150,6 @@ export function nappletPrelude(
       },
     });
   })();`;
-  const options = `{domains:${JSON.stringify(RUNTIME_DOMAINS)},resourceProfile:(${createFipsBinding.toString()}),toolProfile:(${createWebmcpBinding.toString()})}`;
+  const options = `{mouseCapture:${mouseCapture},domains:${JSON.stringify(RUNTIME_DOMAINS)},resourceProfile:(${createFipsBinding.toString()}),toolProfile:(${createWebmcpBinding.toString()})}`;
   return `${WEBRTC_REMOVAL}\n${shim}\nglobalThis.NappletShimPrelude.install(${options});\n${nativeGamepadCompatibility(slots)};\n${config}`;
 }

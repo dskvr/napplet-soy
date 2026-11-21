@@ -216,6 +216,7 @@ export function Player({
           ? undefined
           : verifiedRoomEntry(location.href, release.manifest, backendProvider()?.pubkey),
         frame: node,
+        mouseSurface: reviewScope ? undefined : node.parentElement ?? undefined,
         identity: reviewScope
           ? `proposal:${reviewScope}:${release.manifest.id}`
           : release.hostIdentity,
@@ -264,7 +265,7 @@ export function Player({
           controller.signal,
           (verifiedHtml) => {
             config = declaredConfig(verifiedHtml);
-            return nappletPrelude(shim, config);
+            return nappletPrelude(shim, config, undefined, !reviewScope);
           },
           [...release.servers, ...network().blossom],
           network().blossom,
