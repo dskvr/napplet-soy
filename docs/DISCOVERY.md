@@ -18,7 +18,19 @@ Without JavaScript covers remain ordinary links and pagination remains navigable
 
 ## Browser navigation
 
-Gallery transitions filter the browser's existing catalog immediately; Nostr and
+The regular shell header offers catalogue search from every page. On small
+screens the search button opens the field. Submitting text loads matching
+listings from the site's index, including entries beyond the first page. The
+results view omits the welcome section, collaboration story and social rankings.
+The Create menu offers both Studio in the browser and local soyLI. On phones
+the homepage puts its featured napplet ahead of the CLI setup instructions.
+
+Opening a listing from Explore, Saved or Game Grid gives its detail page a
+return link to that view, preserving its search, page and focused tile.
+A directly shared detail URL offers a link to Explore. Game Grid retains its
+controller search and inline launch behavior.
+
+Other gallery transitions filter the browser's existing catalog immediately; Nostr and
 Blossom enrichment runs in the background. Initial server-rendered entries remain
 available, and an empty browser catalog displays a discovery state until the read
 settles. Concurrent general catalog reads share one in-flight request. Site
@@ -51,7 +63,7 @@ of pending states and the immersive playback regression. Deployment is separate.
 
 ## On-demand Nostr discovery
 
-The search field accepts an naddr, nostr:naddr, note/nevent, or a portable `/n/` or
+The search field opens this site’s canonical `/a/` links and accepts an naddr, nostr:naddr, note/nevent, or a portable `/n/` or
 `/r/` web link. Only the identity is extracted; the pasted website is never fetched.
 A missing portable route adds an exact identity request to `index/discovery.sqlite`.
 This is a separate inbox, not permission for web processes to write catalog events.
@@ -78,6 +90,20 @@ state and retry boundedly. Unknown identities are marked noindex while pending.
 The first crawler request may still precede a slow relay; later requests use the
 stored result. No system can force a third-party crawler to retry or clear its cache.
 
+## Exploring by archetype
+
+Explore offers an **Archetype** selector next to the catalogue filters. Its options
+come from signed `z` tags in the loaded collection, including names the shell has
+never seen before. Counts describe that collection. A selected archetype combines
+with the text query, topic tag and advanced filters, and travels in the URL as
+`?archetype=game`. An empty selection includes napplets that declare no archetype.
+Game Grid also accepts the older `#game` topic.
+
+The [community archetype guide](https://archetypes.napplet.run/) lists names and
+related intents observed across relays. The shell links to it for reference and
+can filter the gallery while it is offline. An archetype describes a purpose;
+permissions and intent handling still depend on their own declarations.
+
 ## Open Graph
 
 Named, naddr and pinned pages expose trusted canonical, Open Graph and Twitter
@@ -92,3 +118,19 @@ The service test deliberately uses a relay which returns manifests only to exact
 queries, proving that opening the cold link causes discovery. It checks SSR OG,
 image delivery, sandbox playback, single-player ownership, fullscreen continuity,
 mobile layout and offscreen teardown without publishing to public relays.
+
+## Catalogue cards and private bookmarks
+
+Cards show a line from the published description. When a playable release accepts the
+public room join intent and the configured provider advertises a matching room with
+space, its card offers a direct join link with the latest reported player count.
+Cards and the Playing now list share one directory refresh. Expired, full and closed
+rooms lose their card link; available capacity can still change before a player joins.
+
+The bookmark control on cards and detail pages adds the listing to **Saved** in
+Explore. Saving an explicit pinned release keeps that exact revision. Current listings
+keep their stable address across updates and different relay hints. The shell keeps
+these bookmarks in this browser's local storage, shared by people using the same
+browser profile. Opening a listing does not add it. Saving works when signed out
+and sends no reaction, read history or bookmark list to the network. Each bookmark
+can be removed from the listing or from Saved.

@@ -70,8 +70,8 @@ export function manifestIcon(event: TaggedManifest): ManifestIcon | null {
     : null;
 }
 
-function optionalMetadata(event: TaggedManifest) {
-  const archetypes = [
+export function manifestArchetypes(event: TaggedManifest): string[] {
+  return [
     ...new Set(
       event.tags
         .filter(
@@ -85,6 +85,10 @@ function optionalMetadata(event: TaggedManifest) {
         .map((t) => t[1]),
     ),
   ];
+}
+
+function optionalMetadata(event: TaggedManifest) {
+  const archetypes = manifestArchetypes(event);
   const intents = new Map<string, ManifestIntent>();
   for (const tag of event.tags) {
     if (

@@ -1,9 +1,22 @@
 # soyLI releases and updates
 
 GitHub Releases distribute the standalone CLI independently of the website/VPS.
-The current published version is **0.34.0**. The repository has transferred to
+The [latest stable release](https://github.com/soytec/napplet-soy/releases/latest)
+contains the installer, platform archives and checksums. The repository has transferred to
 [`soytec/napplet-soy`](https://github.com/soytec/napplet-soy), including its history,
 issues, pull requests and releases.
+
+**0.35.0 — discovery and creator guidance**
+
+The bootstrapper and managed agent skills explain how to publish descriptive
+archetypes, reuse names from the [field guide](https://archetypes.napplet.run/)
+and keep topics, accepted intents and capabilities separate. Existing projects
+can refresh the managed files with `soyli skills update`; review any conflicts.
+An archetype is optional. New names and offline authoring remain supported.
+
+Since 0.34.0, the local preview has also gained shell-mediated controller input,
+player-activated mouse capture and experimental napplet agent tools. The public
+binary and installer continue to use the `soytec/napplet-soy` release channel.
 
 **0.34.0 — realtime multiplayer**
 

@@ -1,3 +1,4 @@
+import { useDiscoveryLink } from './discovery-navigation';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
@@ -137,12 +138,15 @@ function GameCard({
   previewGroup: object;
 }) {
   const { ready } = useNostr();
+  const origin = useDiscoveryLink();
   const playable = napplet.availability === 'ready';
   const canLaunch = (event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>) =>
     ready && playable && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
   return (
-    <a
-      href={publicDetailPath(napplet, true)}
+    <Link
+      to={publicDetailPath(napplet, true)}
+      {...origin}
+      preload={false}
       className="gg-card"
       data-game-id={napplet.revisionId}
       data-playable={playable}
@@ -194,7 +198,7 @@ function GameCard({
           )}
         </span>
       </span>
-    </a>
+    </Link>
   );
 }
 

@@ -1,5 +1,6 @@
 import { blocked, manifestBlocked } from '../../moderation/src/policy';
 import fixtures from '../data/catalog.json';
+import { manifestArchetypes } from '../../protocol/src/manifest';
 import { manifestTopics, matchesGallery } from '../../protocol/src/topics';
 import { withPublicationLink } from './publication-link';
 import { publicArtifact, readPublicCatalog } from './public-catalog';
@@ -12,8 +13,17 @@ import {
   type GallerySearch,
 } from '../../protocol/src';
 
-const records = fixtures.map((record) => ({ ...record, topics: manifestTopics(record.current) }));
-export type Napplet = (typeof records)[number] & { relays?: string[]; permalink?: string };
+const records = fixtures.map((record) => ({
+  ...record,
+  topics: manifestTopics(record.current),
+  archetypes: manifestArchetypes(record.current),
+}));
+export type Napplet = (typeof fixtures)[number] & {
+  topics: string[];
+  archetypes?: string[];
+  relays?: string[];
+  permalink?: string;
+};
 export type NappletCard = Omit<Napplet, 'current' | 'snapshot'> & {
   currentId: string;
   snapshotId: string;

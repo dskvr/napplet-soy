@@ -7,10 +7,10 @@ import {
   stripSearchParams,
   type SearchSchemaInput,
 } from '@tanstack/react-router';
-import { ArrowDown, ArrowUpRight, Eye, Search, Shuffle, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Eye, Shuffle, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { gallerySearchSchema, type GallerySearch } from '../../../../packages/protocol/src';
-import { discoveryTarget } from '../../../../packages/protocol/src/discovery';
+import { SavedLink } from '@/components/saved-napplets';
 import { getBrowseGallery } from '@/lib/catalog.functions';
 import { NappletCard } from '@/components/napplet-card';
 import { GallerySocialProvider, SocialRankings } from '@/components/gallery-social';
@@ -33,6 +33,8 @@ export const Route = createFileRoute('/')({
   },
   loaderDeps: ({ search }) => search,
   loader: ({ deps }) => getBrowseGallery({ data: deps }),
+  // Returning to a collection must preserve its indexed page. Relay refresh runs in Gallery.
+  shouldReload: false,
   head: ({ match, loaderData }) =>
     galleryHead(match.context.clientPolicy.siteOrigin, match.search, loaderData?.page ?? 1),
   component: Gallery,
@@ -52,7 +54,9 @@ function Gallery() {
   const refresh = useProtocolRefresh(
     `gallery:${JSON.stringify([search.archetype, search.intent, search.requiredDomain, search.optionalDomain])}`,
     () => queryCatalog(undefined, search),
-    () => setRefreshVersion((value) => value + 1),
+    (success) => {
+      if (success) setRefreshVersion((value) => value + 1);
+    },
   );
   const {
     napplets,
@@ -68,7 +72,18 @@ function Gallery() {
   } = refreshVersion ? browseProtocol(search) : initial;
   const [showAllTags, setShowAllTags] = useState(false);
   const [active, setActive] = useState<string | null>(null);
-  const [lookupError, setLookupError] = useState('');
+  const resultsOnly = Boolean(
+    search.q ||
+    search.tag ||
+    search.archetype ||
+    search.intent ||
+    search.requiredDomain ||
+    search.optionalDomain ||
+    search.unavailable ||
+    (search.page ?? 1) > 1 ||
+    search.sort === 'featured' ||
+    search.sort === 'updated',
+  );
   const navigate = useNavigate({ from: '/' });
   const update = (patch: Partial<GallerySearch>) =>
     void navigate({ search: (prev) => ({ ...prev, page: 1, ...patch }), resetScroll: false });
@@ -106,137 +121,158 @@ function Gallery() {
   );
   return (
     <GallerySocialProvider search={search}>
-      <section className="hero">
-        <div className="hero-main">
-          <div className="eyebrow">
-            <span className="status-dot" /> A PLAYGROUND FOR THE INTERNET
-          </div>
-          <div className="hero-heading">
-            <h1>
-              Small code.
-              <br />
-              Big{' '}
-              <span className="weird-word">
-                weird
-                <svg viewBox="0 0 320 22" aria-hidden="true">
-                  <path d="M4 13Q110 -2 208 12T316 8M19 19Q166 5 289 18" />
-                </svg>
-              </span>
-              <span className="coral">.</span>
-            </h1>
-            <div className="hero-intro">
-              <p>Tiny games. Happy accidents. Wonderfully unnecessary things.</p>
-              <p>Made by people with an idea and an afternoon.</p>
-              <p className="hero-aside">
-                A little place for devs to live out their{' '}
-                <span className="underline">AI psychosis</span>.
-              </p>
-            </div>
-          </div>
-          <SoyliIdentity compact />
-          <p className="account-free-note">Create, remix and publish. No website account needed.</p>
-          <StarterCommand />
-          <p className="hero-command-note">
-            macOS &amp; Linux · Git required · No Bun or Node installation needed.{' '}
-            <Link to="/create" hash="setup">
-              Setup help ↗
-            </Link>
-          </p>
-          <SoyliBenefits />
-          <div className="hero-links">
-            <Link
-              className="browse-link hero-docs-link"
-              data-tone="blue"
-              data-effect="source"
-              to="/docs"
-            >
-              Meet soyLI. Read the docs <ArrowUpRight size={16} />
-            </Link>
-            <a className="browse-link" href="#explore">
-              Explore first <ArrowDown size={16} />
-            </a>
-          </div>
-        </div>
-        <FeaturedHero
-          initial={featured}
-          empty={
-            <div className="hero-side">
-              <div className="orbit-doodle" aria-hidden="true">
-                <svg viewBox="0 0 220 160">
-                  <ellipse cx="110" cy="80" rx="92" ry="31" transform="rotate(-30 110 80)" />
-                  <ellipse cx="110" cy="80" rx="92" ry="31" transform="rotate(30 110 80)" />
-                  <path d="M110 50V110M80 80H140M89 59L131 101M89 101L131 59" />
-                  <circle cx="177" cy="32" r="8" />
-                </svg>
+      {!resultsOnly && (
+        <>
+          <section className="hero discovery-hero">
+            <div className="hero-main">
+              <div className="eyebrow">
+                <span className="status-dot" /> A PLAYGROUND FOR THE INTERNET
               </div>
-              <span className="remix-sticker">
-                OPEN SOURCE.
-                <br />
-                OPEN SEASON.
-              </span>
-              <p>
-                See something you like?
-                <br />
-                Peek at the code. Make it your own.
-              </p>
-              <Link to="/create">
-                Everyone starts somewhere <ArrowUpRight size={14} />
-              </Link>
+              <div className="hero-heading">
+                <h1>
+                  Small code.
+                  <br />
+                  Big{' '}
+                  <span className="weird-word">
+                    weird
+                    <svg viewBox="0 0 320 22" aria-hidden="true">
+                      <path d="M4 13Q110 -2 208 12T316 8M19 19Q166 5 289 18" />
+                    </svg>
+                  </span>
+                  <span className="coral">.</span>
+                </h1>
+                <div className="hero-intro">
+                  <p>Tiny games. Happy accidents. Wonderfully unnecessary things.</p>
+                  <p>Made by people with an idea and an afternoon.</p>
+                  <p className="hero-aside">
+                    A little place for devs to live out their{' '}
+                    <span className="underline">AI psychosis</span>.
+                  </p>
+                </div>
+              </div>
             </div>
-          }
-        />
-      </section>
-      {!search.q &&
-        !search.tag &&
-        !search.archetype &&
-        !search.intent &&
-        !search.requiredDomain &&
-        !search.optionalDomain && <PlayingNow />}
-      <CollaborationStory />
-      <section id="explore" className="explore-section" aria-label="Explore napplets">
-        {refresh}
-        <div className="explore-top">
-          <div>
-            <h2>
-              The playground <span>{String(matches).padStart(2, '0')}</span>
-            </h2>
-            <p>Follow a tag. Find your kind of weird.</p>
-            {status.publicdev && !status.fetchedAt && (
-              <p className="publicdev-status" role="status">
-                Discovery is temporarily unavailable. Showing the available collection.
+            <FeaturedHero
+              initial={featured}
+              empty={
+                <div className="hero-side">
+                  <div className="orbit-doodle" aria-hidden="true">
+                    <svg viewBox="0 0 220 160">
+                      <ellipse cx="110" cy="80" rx="92" ry="31" transform="rotate(-30 110 80)" />
+                      <ellipse cx="110" cy="80" rx="92" ry="31" transform="rotate(30 110 80)" />
+                      <path d="M110 50V110M80 80H140M89 59L131 101M89 101L131 59" />
+                      <circle cx="177" cy="32" r="8" />
+                    </svg>
+                  </div>
+                  <span className="remix-sticker">
+                    OPEN SOURCE.
+                    <br />
+                    OPEN SEASON.
+                  </span>
+                  <p>
+                    See something you like?
+                    <br />
+                    Peek at the code. Make it your own.
+                  </p>
+                  <Link to="/create">
+                    Everyone starts somewhere <ArrowUpRight size={14} />
+                  </Link>
+                </div>
+              }
+            />
+            <div className="hero-maker">
+              <SoyliIdentity compact />
+              <p className="account-free-note">
+                Create, remix and publish. No website account needed.
               </p>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            className="shuffle-button"
-            data-tone="lilac"
-            data-effect="surprise"
-            disabled={!ready || !napplets.length}
-            onClick={() => {
-              const n = napplets[Math.floor(Math.random() * napplets.length)];
-              void navigate(publicLink(n));
-            }}
-          >
-            <Shuffle size={15} />
-            Surprise me
-          </Button>
-        </div>
-        <SocialRankings active={active} setActive={setActive} />
+              <StarterCommand />
+              <p className="hero-command-note">
+                macOS &amp; Linux · Git required · No Bun or Node installation needed.{' '}
+                <Link to="/create" hash="setup">
+                  Setup help ↗
+                </Link>
+              </p>
+              <SoyliBenefits />
+              <div className="hero-links">
+                <Link
+                  className="browse-link hero-docs-link"
+                  data-tone="blue"
+                  data-effect="source"
+                  to="/docs"
+                >
+                  Meet soyLI. Read the docs <ArrowUpRight size={16} />
+                </Link>
+                <a className="browse-link" href="#explore">
+                  Explore first <ArrowDown size={16} />
+                </a>
+              </div>
+            </div>
+          </section>
+          <PlayingNow />
+          <CollaborationStory />
+        </>
+      )}
+      <section
+        id="explore"
+        className={resultsOnly ? 'explore-section discovery-results' : 'explore-section'}
+        aria-label="Explore napplets"
+      >
+        {refresh}
+        {!resultsOnly && (
+          <>
+            <div className="explore-top">
+              <div>
+                <h2>
+                  The playground <span>{String(matches).padStart(2, '0')}</span>
+                </h2>
+                <p>Follow a tag. Find your kind of weird.</p>
+                {status.publicdev && !status.fetchedAt && (
+                  <p className="publicdev-status" role="status">
+                    Discovery is temporarily unavailable. Showing the available collection.
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                className="shuffle-button"
+                data-tone="lilac"
+                data-effect="surprise"
+                disabled={!ready || !napplets.length}
+                onClick={() => {
+                  const n = napplets[Math.floor(Math.random() * napplets.length)];
+                  void navigate(publicLink(n));
+                }}
+              >
+                <Shuffle size={15} />
+                Surprise me
+              </Button>
+            </div>
+            <SocialRankings active={active} setActive={setActive} />
+          </>
+        )}
         <section id="napplets" className="napplet-collection" aria-labelledby="collection-heading">
-          <h3 id="collection-heading" className="collection-heading">
-            {search.q ||
-            search.tag ||
-            search.archetype ||
-            search.intent ||
-            search.requiredDomain ||
-            search.optionalDomain
-              ? 'Matching napplets'
-              : search.sort === 'featured'
-                ? 'Featured napplets'
-                : 'All napplets'}
-            <span>{matches}</span>
-          </h3>
+          <div className="discovery-collection-heading">
+            {resultsOnly ? (
+              <h1 id="collection-heading" className="collection-heading">
+                {search.q
+                  ? 'Results for “' + search.q + '”'
+                  : search.sort === 'featured'
+                    ? 'Featured napplets'
+                    : search.tag ||
+                        search.archetype ||
+                        search.intent ||
+                        search.requiredDomain ||
+                        search.optionalDomain
+                      ? 'Matching napplets'
+                      : 'All napplets'}
+                <span>{matches}</span>
+              </h1>
+            ) : (
+              <h3 id="collection-heading" className="collection-heading">
+                All napplets <span>{matches}</span>
+              </h3>
+            )}
+            <SavedLink />
+          </div>
           <div className="gallery-tools">
             <div className="topic-tabs" role="group" aria-label="Filter by tag">
               <button
@@ -260,44 +296,6 @@ function Gallery() {
               )}
             </div>
             <div className="search-sort">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const value = String(new FormData(e.currentTarget).get('q') ?? '').trim();
-                  setLookupError('');
-                  if (/^(nostr:|naddr1|note1|nevent1|https?:\/\/)/i.test(value)) {
-                    try {
-                      if (/^https?:\/\//i.test(value)) {
-                        const url = new URL(value);
-                        const path = /^\/a\/([a-z0-9-]+)(?:\/play)?\/?$/.exec(url.pathname);
-                        if (url.origin === location.origin && path) {
-                          void navigate({ to: '/a/$permalink', params: { permalink: path[1] } });
-                          return;
-                        }
-                      }
-                      void navigate({ to: discoveryTarget(value).path });
-                    } catch {
-                      setLookupError('Paste a napplet naddr or a portable napplet link.');
-                    }
-                  } else update({ q: value.slice(0, 100) });
-                }}
-                className="search-field"
-              >
-                <Search size={15} />
-                <input
-                  aria-label="Search napplets"
-                  name="q"
-                  placeholder="Search or paste a napplet link…"
-                  maxLength={4096}
-                  defaultValue={search.q}
-                  key={search.q}
-                />
-                {search.q && (
-                  <button type="button" aria-label="Clear search" onClick={() => update({ q: '' })}>
-                    <X size={13} />
-                  </button>
-                )}
-              </form>
               <select
                 disabled={!ready}
                 aria-label="Sort napplets"
@@ -337,7 +335,6 @@ function Gallery() {
               </div>
             </div>
           )}
-          {lookupError && <p role="alert">{lookupError}</p>}
           <div className="napplet-grid">
             {napplets.map((n, index) => (
               <NappletCard
@@ -358,6 +355,7 @@ function Gallery() {
                 <Link
                   to="/"
                   search={{ ...search, page: page - 1 }}
+                  reloadDocument
                   hash="napplets"
                   className="pagination-link"
                 >
@@ -373,6 +371,7 @@ function Gallery() {
                 <Link
                   to="/"
                   search={{ ...search, page: page + 1 }}
+                  reloadDocument
                   hash="napplets"
                   className="pagination-link"
                 >
@@ -418,16 +417,18 @@ function Gallery() {
           )}
         </section>
       </section>
-      <section className="create-banner">
-        <span className="banner-star">✳</span>
-        <div>
-          <h2>The next weird thing could be yours.</h2>
-          <p>Start small. Follow the idea. See what happens.</p>
-        </div>
-        <Link to="/create">
-          Make your first napplet <ArrowUpRight size={17} />
-        </Link>
-      </section>
+      {!resultsOnly && (
+        <section className="create-banner">
+          <span className="banner-star">✳</span>
+          <div>
+            <h2>The next weird thing could be yours.</h2>
+            <p>Start small. Follow the idea. See what happens.</p>
+          </div>
+          <Link to="/create">
+            Make your first napplet <ArrowUpRight size={17} />
+          </Link>
+        </section>
+      )}
     </GallerySocialProvider>
   );
 }

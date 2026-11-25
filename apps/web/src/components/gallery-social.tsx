@@ -1,3 +1,4 @@
+import { useDiscoveryLink } from './discovery-navigation';
 import { galleryEntries, gallerySocial, publishSocial } from '@/lib/protocol-social';
 import {
   createContext,
@@ -18,6 +19,7 @@ import { ActionButton } from './action-button';
 import { useNostr } from './nostr-provider';
 import { ZapButton } from './zap-button';
 import { NappletCard } from './napplet-card';
+import { RoomDirectoryProvider } from './playing-now';
 import { jsonResponse, signForAccount } from '@/lib/community-client';
 import {
   deletionTemplate,
@@ -214,7 +216,7 @@ export function GallerySocialProvider({
         },
       }}
     >
-      {children}
+      <RoomDirectoryProvider>{children}</RoomDirectoryProvider>
       {pending && !cards[pending.napplet.revisionId] && <GalleryPendingAction />}
     </Context.Provider>
   );
@@ -251,6 +253,7 @@ export function GalleryCardSocial({
 }) {
   const social = useContext(Context),
     { pubkey, ready } = useNostr();
+  const origin = useDiscoveryLink();
   const zaps = useZapTotals(socialScope(napplet.manifest).key);
   const conversation = useNappletCounts(napplet);
   useEffect(() => social?.register(napplet.revisionId), [social?.register, napplet.revisionId]);
@@ -294,6 +297,7 @@ export function GalleryCardSocial({
           <Button asChild size="sm" variant="ghost" data-tone="mint">
             <Link
               {...publicLink(napplet)}
+              {...origin}
               hash="comments"
               aria-label={`Comment on ${napplet.title}: ${counts?.commentCount ?? 'unknown'} comments`}
             >

@@ -20,6 +20,7 @@ import { Route as GgRouteImport } from './routes/gg'
 import { Route as ManageRouteImport } from './routes/manage'
 import { Route as NetworkRouteImport } from './routes/network'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SavedRouteImport } from './routes/saved'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as StudioConnectRouteImport } from './routes/studio-connect'
@@ -104,6 +105,11 @@ const NetworkRoute = NetworkRouteImport.update({
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SavedRoute = SavedRouteImport.update({
+  id: '/saved',
+  path: '/saved',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -270,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/manage': typeof ManageRoute
   '/network': typeof NetworkRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRouteWithChildren
   '/studio-connect': typeof StudioConnectRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByTo {
   '/manage': typeof ManageRoute
   '/network': typeof NetworkRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio-connect': typeof StudioConnectRoute
   '/$creator/$slug': typeof CreatorSlugRouteWithChildren
@@ -356,6 +364,7 @@ export interface FileRoutesById {
   '/manage': typeof ManageRoute
   '/network': typeof NetworkRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/saved': typeof SavedRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRouteWithChildren
   '/studio-connect': typeof StudioConnectRoute
@@ -401,6 +410,7 @@ export interface FileRouteTypes {
     | '/manage'
     | '/network'
     | '/robots.txt'
+    | '/saved'
     | '/sitemap.xml'
     | '/studio'
     | '/studio-connect'
@@ -444,6 +454,7 @@ export interface FileRouteTypes {
     | '/manage'
     | '/network'
     | '/robots.txt'
+    | '/saved'
     | '/sitemap.xml'
     | '/studio-connect'
     | '/$creator/$slug'
@@ -486,6 +497,7 @@ export interface FileRouteTypes {
     | '/manage'
     | '/network'
     | '/robots.txt'
+    | '/saved'
     | '/sitemap.xml'
     | '/studio'
     | '/studio-connect'
@@ -530,6 +542,7 @@ export interface RootRouteChildren {
   ManageRoute: typeof ManageRoute
   NetworkRoute: typeof NetworkRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SavedRoute: typeof SavedRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRouteWithChildren
   StudioConnectRoute: typeof StudioConnectRoute
@@ -628,6 +641,13 @@ declare module '@tanstack/react-router' {
       path: '/robots.txt'
       fullPath: '/robots.txt'
       preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/saved': {
+      id: '/saved'
+      path: '/saved'
+      fullPath: '/saved'
+      preLoaderRoute: typeof SavedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -952,6 +972,7 @@ const rootRouteChildren: RootRouteChildren = {
   ManageRoute: ManageRoute,
   NetworkRoute: NetworkRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
+  SavedRoute: SavedRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRouteWithChildren,
   StudioConnectRoute: StudioConnectRoute,
