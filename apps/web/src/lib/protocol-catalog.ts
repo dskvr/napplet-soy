@@ -114,6 +114,8 @@ export function seedCatalog(values: PublicNapplet[]) {
     if (n.manifest.kind !== 5129) {
       for (const [id, known] of entries) {
         if (catalogKey(known.manifest) !== catalogKey(n.manifest)) continue;
+        // The same signed identity retains the shell's assigned link when live relay data replaces SSR data.
+        if (!n.permalink && known.permalink) n.permalink = known.permalink;
         if (newest(known.manifest, n.manifest) < 0) list = false;
         else if (id !== n.revisionId) entries.delete(id);
       }

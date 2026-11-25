@@ -109,6 +109,10 @@ export class IndexStore {
   rows() {
     return this.db.query<IndexRow, []>('SELECT * FROM records').all();
   }
+  /** Changes whenever the worker commits to this read connection's database. */
+  dataVersion() {
+    return this.db.query<{ data_version: number }, []>('PRAGMA data_version').get()!.data_version;
+  }
   /** Retained signed revisions are available by ID, never additional gallery entries. */
   allRows() {
     return this.db

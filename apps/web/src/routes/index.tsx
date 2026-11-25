@@ -21,7 +21,7 @@ import { PlayingNow } from '@/components/playing-now';
 import { FeaturedHero } from '@/components/featured-hero';
 import { StarterCommand } from '@/components/starter-command';
 import { SoyliBenefits, SoyliIdentity } from '@/components/soyli-intro';
-import { siteHead } from '@/lib/site-head';
+import { galleryHead } from '@/lib/site-head';
 import { CollaborationStory } from '@/components/collaboration-story';
 import { GalleryFilters } from '@/components/gallery-filters';
 
@@ -33,7 +33,8 @@ export const Route = createFileRoute('/')({
   },
   loaderDeps: ({ search }) => search,
   loader: ({ deps }) => getBrowseGallery({ data: deps }),
-  head: ({ match }) => siteHead(match.context.clientPolicy.siteOrigin),
+  head: ({ match, loaderData }) =>
+    galleryHead(match.context.clientPolicy.siteOrigin, match.search, loaderData?.page ?? 1),
   component: Gallery,
 });
 function Gallery() {
@@ -266,6 +267,14 @@ function Gallery() {
                   setLookupError('');
                   if (/^(nostr:|naddr1|note1|nevent1|https?:\/\/)/i.test(value)) {
                     try {
+                      if (/^https?:\/\//i.test(value)) {
+                        const url = new URL(value);
+                        const path = /^\/a\/([a-z0-9-]+)(?:\/play)?\/?$/.exec(url.pathname);
+                        if (url.origin === location.origin && path) {
+                          void navigate({ to: '/a/$permalink', params: { permalink: path[1] } });
+                          return;
+                        }
+                      }
                       void navigate({ to: discoveryTarget(value).path });
                     } catch {
                       setLookupError('Paste a napplet naddr or a portable napplet link.');

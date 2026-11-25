@@ -49,6 +49,7 @@ test('immersive routes preserve the verified frame and host session across nativ
     ['d', 'little-orbit'],
     ['server', String(storage.url).replace(/\/$/, '')],
     ['title', 'Little orbit'],
+    ['t', 'game'],
     [
       'description',
       'A live session, wherever you play. ' + 'A little world to explore together. '.repeat(12),
@@ -115,6 +116,7 @@ test('immersive routes preserve the verified frame and host session across nativ
       PORT: String(port),
       SPACE_SITE_ORIGIN: origin,
       SPACE_INDEX_DIR: join(directory, 'index'),
+      SPACE_COMMUNITY_DIR: join(directory, 'community'),
       SPACE_INDEX_RELAYS: `ws://127.0.0.1:${storage.port}`,
       SPACE_INDEX_LOCAL_BLOSSOM: String(storage.url),
       SPACE_PUBLICDEV: '0',
@@ -160,6 +162,36 @@ test('immersive routes preserve the verified frame and host session across nativ
       `/r/${fixtures[0].snapshot.id}`,
       `/@${fixtures[0].handle}/${fixtures[0].slug}`,
     ];
+    // Follow a game tile with JavaScript off, as a crawler or a new tab would.
+    const reader = await browser.newPage({ javaScriptEnabled: false });
+    await reader.goto(origin + '/gg');
+    const tileSelector = `a.gg-card[data-game-id="${current.id}"]`;
+    const tile = reader.locator(tileSelector).first();
+    const href = await tile.getAttribute('href');
+    expect(href).toMatch(/^\/a\/little-orbit-[0-9a-f]{12,64}$/);
+    await tile.click();
+    await browserExpect(reader).toHaveURL(origin + href);
+    await browserExpect(reader.locator('h1')).toHaveText('Little orbit.');
+    await browserExpect(reader.locator('link[rel=canonical]')).toHaveAttribute(
+      'href',
+      origin + href,
+    );
+    await reader.close();
+
+    await page.goto(origin + '/gg');
+    await browserExpect(page.getByRole('button', { name: 'Connect account' })).toBeEnabled();
+    const gridTile = page.locator(tileSelector).first();
+    const [details] = await Promise.all([
+      context.waitForEvent('page'),
+      gridTile.click({ modifiers: ['ControlOrMeta'] }),
+    ]);
+    await browserExpect(details).toHaveURL(origin + href);
+    await details.close();
+    await browserExpect(page.locator('.gamegrid')).toHaveAttribute('data-playing', 'false');
+    await gridTile.press('Enter');
+    await readyFrame(page);
+    await browserExpect(page).toHaveURL(origin + '/gg');
+
     for (const path of paths) {
       const response = await fetch(`${origin}${path}/play`);
       expect(response.status).toBe(200);
@@ -269,7 +301,7 @@ test('immersive routes preserve the verified frame and host session across nativ
         round: 'seven',
         files: [{ path: '/files/round.txt' }],
       });
-      await browserExpect(page.getByRole('link', { name: 'round.txt ↓' })).toBeVisible();
+      await browserExpect(page.getByRole('link', { name: 'Download round.txt' })).toBeVisible();
     };
     await page.getByRole('button', { name: 'Fullscreen', exact: true }).click();
     await browserExpect(page).toHaveURL(origin + detail + '/play');

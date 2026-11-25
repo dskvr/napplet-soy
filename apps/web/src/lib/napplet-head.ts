@@ -1,4 +1,4 @@
-import { OG_VERSION } from '../../../../packages/backend/src/public-model';
+import { OG_VERSION, publicDetailPath } from '../../../../packages/backend/src/public-model';
 
 type Shareable = {
   title: string;
@@ -32,4 +32,15 @@ export function nappletHead(n: Shareable | undefined, path: string, imageId?: st
     ],
     links: [{ rel: 'canonical', href: url }],
   };
+}
+
+type CurrentPage = Shareable & {
+  naddr: string | null;
+  permalink?: string;
+} & ({ revisionId: string } | { snapshot: { id: string } });
+
+export function currentNappletHead(n?: CurrentPage) {
+  if (!n) return nappletHead(undefined, '');
+  const revisionId = 'revisionId' in n ? n.revisionId : n.snapshot.id;
+  return nappletHead(n, publicDetailPath({ ...n, revisionId }), revisionId);
 }

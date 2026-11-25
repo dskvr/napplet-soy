@@ -1,4 +1,5 @@
 import { test, expect } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,6 +84,47 @@ test('signed names survive restarts, normalize relay hints and cannot be stolen 
     store = new CommunityStore(dir);
     expect(store.lookup('alice', 'first')?.naddr).toBe(encodeAddress(identity));
     expect(store.creator('alice')).toHaveLength(1);
+  } finally {
+    store.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('publication links freeze the first title and bind the suffix to the full identity', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'space-permalink-'));
+  let store = new CommunityStore(dir);
+  try {
+    const identity = { kind: 35129 as const, pubkey: 'a'.repeat(64), identifier: 'test' };
+    const portable = encodeAddress(identity);
+    const link = store.registerPublication(
+      encodeAddress(identity, ['wss://example.org']),
+      'Póly Cube!',
+    );
+    expect(link).toMatch(/^poly-cube-[0-9a-f]{12}$/);
+    store.close();
+    store = new CommunityStore(dir);
+    expect(store.registerPublication(portable, 'Renamed')).toBe(link);
+    expect(store.publicationAddress(link)).toBe(portable);
+    expect(store.publicationAddress(link.replace('poly', 'other'))).toBeUndefined();
+    const other = encodeAddress({ ...identity, identifier: 'other' });
+    expect(store.registerPublication(other, 'Póly Cube!')).not.toBe(link);
+    expect(
+      store.registerPublication(encodeAddress({ ...identity, kind: 15129, identifier: '' }), '星'),
+    ).toMatch(/^napplet-[0-9a-f]{12}$/);
+
+    // Reserve the first suffix to exercise the collision path without a hash search.
+    const digest = createHash('sha256').update(`35129:${identity.pubkey}:collision`).digest('hex');
+    store.db.run('INSERT INTO publication_links VALUES(?,?,?,?)', [
+      'reserved',
+      digest.slice(0, 12),
+      'reserved-link',
+      'reserved-naddr',
+    ]);
+    const disputed = encodeAddress({ ...identity, identifier: 'collision' });
+    expect(store.registerPublication(disputed, 'Póly Cube!')).toBe(
+      `poly-cube-${digest.slice(0, 16)}`,
+    );
+    expect(store.publicationAddress('reserved-link')).toBe('reserved-naddr');
   } finally {
     store.close();
     await rm(dir, { recursive: true, force: true });

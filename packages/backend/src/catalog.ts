@@ -1,6 +1,7 @@
 import { blocked, manifestBlocked } from '../../moderation/src/policy';
 import fixtures from '../data/catalog.json';
 import { manifestTopics, matchesGallery } from '../../protocol/src/topics';
+import { withPublicationLink } from './publication-link';
 import { publicArtifact, readPublicCatalog } from './public-catalog';
 import { preparePlayback } from '../../runtime/src/playback';
 import { indexedArtifact, indexedRevision, indexStore } from './indexed-catalog';
@@ -12,7 +13,7 @@ import {
 } from '../../protocol/src';
 
 const records = fixtures.map((record) => ({ ...record, topics: manifestTopics(record.current) }));
-export type Napplet = (typeof records)[number] & { relays?: string[] };
+export type Napplet = (typeof records)[number] & { relays?: string[]; permalink?: string };
 export type NappletCard = Omit<Napplet, 'current' | 'snapshot'> & {
   currentId: string;
   snapshotId: string;
@@ -55,7 +56,7 @@ export async function gallery(search: GallerySearch) {
   });
   if (search.sort === 'new')
     list = [...list].sort((a, b) => b.current.created_at - a.current.created_at);
-  return list.map(toCard);
+  return list.map((entry) => withPublicationLink(toCard(entry)));
 }
 export type Lookup =
   | { type: 'named'; creator: string; slug: string }

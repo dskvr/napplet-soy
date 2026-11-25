@@ -197,6 +197,7 @@ test('share metadata is present without JavaScript on named, portable, and pinne
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   const n = records[0];
+  let currentCanonical: string | undefined;
   try {
     for (const path of [`/@space-lab/${n.slug}`, `/n/${n.naddr}`, `/r/${n.snapshot.id}`]) {
       await page.goto(path);
@@ -213,7 +214,16 @@ test('share metadata is present without JavaScript on named, portable, and pinne
       expect(bytes.readUInt32BE(16)).toBe(1200);
       expect(bytes.readUInt32BE(20)).toBe(630);
       const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
-      expect(canonical).toContain(path.startsWith('/r/') ? path : `/@space-lab/${n.slug}`);
+      expect(canonical).toBeTruthy();
+      await expect(page.locator('meta[property="og:url"]')).toHaveAttribute('content', canonical!);
+      if (path.startsWith('/r/')) expect(new URL(canonical!).pathname).toBe(path);
+      else {
+        expect(new URL(canonical!).pathname).toMatch(
+          /^\/(a\/[a-z0-9-]+-[a-f0-9]{12,64}|n\/naddr1[a-z0-9]+)$/,
+        );
+        currentCanonical ??= canonical!;
+        expect(canonical).toBe(currentCanonical);
+      }
     }
     await page.screenshot({ path: '.local/og-page-no-js.png', fullPage: true });
   } finally {

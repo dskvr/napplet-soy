@@ -106,6 +106,7 @@ test('32 MiB napplet: relay → index worker → production SSR → sandbox play
     });
     const env = {
       SPACE_INDEX_DIR: join(directory, 'index'),
+      SPACE_COMMUNITY_DIR: join(directory, 'community'),
       SPACE_INDEX_RELAYS: relay,
       SPACE_INDEX_LOCAL_BLOSSOM: origin,
       SPACE_RELEASE_ID: 'index-test',
@@ -146,12 +147,32 @@ test('32 MiB napplet: relay → index worker → production SSR → sandbox play
     };
     expect(await confirmWebsite(publication)).toMatchObject({ ready: true });
     const naddr = encodeAddress(identity, [relay]);
+    const robots = await fetch(`${site}/robots.txt`);
+    expect(robots.headers.get('content-type')).toContain('text/plain');
+    expect(await robots.text()).toContain('/sitemap.xml');
+    const sitemap = await fetch(`${site}/sitemap.xml`);
+    expect(sitemap.status).toBe(200);
+    expect(sitemap.headers.get('content-type')).toContain('application/xml');
+    const urls = await sitemap.text();
     for (const path of [`/n/${naddr}`, `/r/${snapshot.id}`]) {
       const response = await fetch(site + path),
         html = await response.text();
       expect(response.status).toBe(200);
       expect(html).toContain('Relay arrival');
       expect(html).toContain('og:image');
+      if (path.startsWith('/n/')) {
+        let canonical = '';
+        await new HTMLRewriter()
+          .on('link[rel="canonical"]', {
+            element(element) {
+              canonical = element.getAttribute('href') ?? '';
+            },
+          })
+          .transform(new Response(html))
+          .text();
+        expect(new URL(canonical).pathname).toMatch(/^\/a\/relay-arrival-[0-9a-f]+$/);
+        expect(urls).toContain(`<loc>${canonical}</loc>`);
+      }
     }
     expect(await (await fetch(`${origin}/${hash}`)).bytes()).toEqual(bytes);
     const og = await fetch(`${site}/api/og/${current.id}`);

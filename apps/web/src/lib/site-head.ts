@@ -1,4 +1,5 @@
 import { OG_VERSION } from '../../../../packages/backend/src/public-model';
+import type { GallerySearch } from '../../../../packages/protocol/src';
 
 export const siteDescription =
   'A playground for tiny games, digital experiments, and wonderfully unnecessary things. Play, inspect, and remix.';
@@ -34,4 +35,23 @@ export function siteHead(
     ],
     links: [{ rel: 'canonical', href: url }],
   };
+}
+
+export function galleryHead(origin: string, search: GallerySearch, page: number) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(search)) {
+    if (key === 'page' || !value || (key === 'sort' && value === 'new')) continue;
+    query.set(key, String(value));
+  }
+  const filtered = query.size > 0;
+  if (page > 1) query.set('page', String(page));
+  const path = query.size ? `/?${query}` : '/';
+  const head = siteHead(
+    origin,
+    path,
+    page > 1 ? `Napplet gallery · Page ${page} — napplet.soy` : undefined,
+  );
+  return filtered
+    ? { meta: [...head.meta, { name: 'robots', content: 'noindex, follow' }], links: [] }
+    : head;
 }

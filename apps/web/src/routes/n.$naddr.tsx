@@ -1,5 +1,5 @@
 import { PublicDetail } from '@/components/public-detail';
-import { nappletHead } from '@/lib/napplet-head';
+import { currentNappletHead } from '@/lib/napplet-head';
 import { createFileRoute, notFound } from '@tanstack/react-router';
 import { getDiscoveredNapplet } from '@/lib/catalog.functions';
 import { Detail } from '@/components/detail';
@@ -15,11 +15,7 @@ export const Route = createFileRoute('/n/$naddr')({
   head: ({ loaderData }) => {
     const n = loaderData?.napplet;
     return n
-      ? nappletHead(
-          n,
-          'provenance' in n ? `/n/${n.naddr}` : `/@${n.handle}/${n.slug}`,
-          'provenance' in n ? n.revisionId : n.snapshot.id,
-        )
+      ? currentNappletHead(n)
       : {
           meta: [
             { title: 'Discovering a napplet — napplet.soy' },

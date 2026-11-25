@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -32,6 +33,10 @@ export class CommunityStore {
       CREATE TABLE IF NOT EXISTS handles(handle TEXT PRIMARY KEY, pubkey TEXT UNIQUE NOT NULL);
       CREATE TABLE IF NOT EXISTS aliases(handle TEXT NOT NULL, slug TEXT NOT NULL, address TEXT NOT NULL, naddr TEXT NOT NULL, pubkey TEXT NOT NULL, PRIMARY KEY(handle,slug));
       CREATE INDEX IF NOT EXISTS aliases_address ON aliases(address);
+      CREATE TABLE IF NOT EXISTS publication_links (
+        address TEXT PRIMARY KEY, short_id TEXT UNIQUE NOT NULL,
+        permalink TEXT UNIQUE NOT NULL, naddr TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS social_events(id TEXT NOT NULL, scope TEXT NOT NULL, created INTEGER NOT NULL, event TEXT NOT NULL, PRIMARY KEY(scope,id));
       CREATE INDEX IF NOT EXISTS social_scope_v2 ON social_events(scope,created);
@@ -59,6 +64,54 @@ export class CommunityStore {
       this.db.exec(
         'DELETE FROM profiles WHERE rowid IN (SELECT rowid FROM profiles ORDER BY created DESC,id LIMIT -1 OFFSET 10000)',
       );
+  }
+  publicationLink(address: string) {
+    return this.db
+      .query<{ permalink: string }, [string]>(
+        'SELECT permalink FROM publication_links WHERE address=?',
+      )
+      .get(address)?.permalink;
+  }
+  publicationAddress(permalink: string) {
+    return this.db
+      .query<{ naddr: string }, [string]>('SELECT naddr FROM publication_links WHERE permalink=?')
+      .get(permalink)?.naddr;
+  }
+  registerPublication(naddr: string, title: string) {
+    const identity = decodeAddress(naddr);
+    const address = identityAddress(identity);
+    const current = this.publicationLink(address);
+    if (current) return current;
+    const prefix =
+      title
+        .normalize('NFKD')
+        .replace(/\p{Mark}/gu, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .slice(0, 56)
+        .replace(/^-|-$/g, '') || 'napplet';
+    const hash = createHash('sha256').update(address).digest('hex');
+    const portable = encodeAddress(identity);
+    // Serialize first observation across web processes. A colliding newcomer
+    // extends its own suffix, so every URL already handed out stays valid.
+    return this.db
+      .transaction(() => {
+        const existing = this.publicationLink(address);
+        if (existing) return existing;
+        for (let length = 12; length <= hash.length; length += 4) {
+          const id = hash.slice(0, length);
+          const permalink = `${prefix}-${id}`;
+          if (
+            this.db.run(
+              'INSERT INTO publication_links(address,short_id,permalink,naddr) VALUES(?,?,?,?) ON CONFLICT(short_id) DO NOTHING',
+              [address, id, permalink, portable],
+            ).changes
+          )
+            return permalink;
+        }
+        throw new Error('Could not allocate a unique publication link.');
+      })
+      .immediate();
   }
   aliases(address: string) {
     return this.db

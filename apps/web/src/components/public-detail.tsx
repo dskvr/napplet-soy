@@ -12,7 +12,11 @@ import { useEventStore } from 'applesauce-react/hooks';
 import { Player } from './player';
 import { TopicTags } from './topic-tags';
 import { Button } from './ui/button';
-import { publicPoster, type PublicNapplet } from '../../../../packages/backend/src/public-model';
+import {
+  publicDetailPath,
+  publicPoster,
+  type PublicNapplet,
+} from '../../../../packages/backend/src/public-model';
 import { missingDomains } from '../../../../packages/runtime/src/capabilities';
 import { NameButton } from './name-button';
 import { NappletSocial } from './social-panel';
@@ -55,6 +59,7 @@ export function PublicDetail({
       title={napplet.title}
       relays={napplet.relays ?? []}
       presentation={napplet}
+      sharePath={pinned ? `/r/${napplet.revisionId}` : publicDetailPath(napplet, true)}
     >
       {({ actions, feedback, discussion }) => (
         <section className="detail-page">
