@@ -1118,6 +1118,7 @@ pre:focus-visible {
 }
 .detail-info aside {
   font-size: 11px;
+  min-width: 0;
 }
 .detail-info aside > a {
   display: flex;
@@ -1140,6 +1141,23 @@ pre:focus-visible {
 }
 .detail-info aside > div > span {
   color: var(--muted-foreground);
+}
+.detail-info aside > .nostr-identifier {
+  align-items: center;
+  justify-content: flex-start;
+}
+.nostr-identifier code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-family: var(--mono);
+  user-select: all;
+}
+.nostr-identifier button {
+  flex: none;
 }
 .detail-info strong {
   font-weight: 400;
