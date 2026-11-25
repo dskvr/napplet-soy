@@ -3,7 +3,12 @@ import { manifestSourceLocation } from '../../protocol/src/source-archive';
 import { cachedVideoSchema } from '../../protocol/src/preview-video';
 import { z } from 'zod';
 import { nip19 } from 'nostr-tools';
-import { eventSchema, encodeAddress, MAX_READ_ARTIFACT_BYTES } from '../../protocol/src';
+import {
+  eventSchema,
+  encodeAddress,
+  decodeAddress,
+  MAX_READ_ARTIFACT_BYTES,
+} from '../../protocol/src';
 import { validateManifest } from '../../protocol/src/manifest';
 import { missingDomains } from '../../runtime/src/capabilities';
 import { cachedPreviewSchema } from '../../protocol/src/preview';
@@ -43,6 +48,10 @@ export const publicNappletSchema = z.object({
     .nullable()
     .optional(),
   naddr: z.string().max(4096).nullable(),
+  permalink: z
+    .string()
+    .regex(/^[a-z0-9-]{1,56}-[0-9a-f]{12,64}$/)
+    .optional(),
   bytes: z.number().int().min(0).max(MAX_READ_ARTIFACT_BYTES).nullable(),
   domains: z.array(z.string()).max(256),
   relays: z.array(z.string().max(256)).max(8).default([]),
@@ -137,7 +146,21 @@ export function publicPreviewVideo(entry: PublicNapplet) {
     };
   return linkedMedia(entry.manifest, entry.metadata ?? []).videos[0];
 }
-export const publicLink = (entry: PublicNapplet) =>
-  entry.naddr
-    ? { to: '/n/$naddr' as const, params: { naddr: entry.naddr } }
-    : { to: '/r/$snapshot' as const, params: { snapshot: entry.revisionId } };
+type Linkable = { naddr: string | null; revisionId: string; permalink?: string };
+
+export function publicLink(entry: Linkable) {
+  if (!entry.naddr) return { to: '/r/$snapshot' as const, params: { snapshot: entry.revisionId } };
+  if (entry.permalink)
+    return { to: '/a/$permalink' as const, params: { permalink: entry.permalink } };
+  return { to: '/n/$naddr' as const, params: { naddr: entry.naddr } };
+}
+
+export function publicDetailPath(entry: Linkable, portable = false) {
+  const link = publicLink(entry);
+  if (link.to === '/a/$permalink') return `/a/${link.params.permalink}`;
+  if (link.to === '/n/$naddr') {
+    const naddr = link.params.naddr;
+    return `/n/${portable ? naddr : encodeAddress(decodeAddress(naddr))}`;
+  }
+  return `/r/${link.params.snapshot}`;
+}

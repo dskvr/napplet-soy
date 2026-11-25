@@ -19,10 +19,13 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as GgRouteImport } from './routes/gg'
 import { Route as ManageRouteImport } from './routes/manage'
 import { Route as NetworkRouteImport } from './routes/network'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as StudioConnectRouteImport } from './routes/studio-connect'
 import { Route as CreatorSlugRouteImport } from './routes/$creator.$slug'
 import { Route as DotwellKnownNappletDotjsonRouteImport } from './routes/[.]well-known.napplet[.]json'
+import { Route as APermalinkRouteImport } from './routes/a.$permalink'
 import { Route as ApiAdminRouteImport } from './routes/api.admin'
 import { Route as ApiAdminAccessRouteImport } from './routes/api.admin-access'
 import { Route as ApiHealthRouteImport } from './routes/api.health'
@@ -39,6 +42,7 @@ import { Route as StudioIndexRouteImport } from './routes/studio.index'
 import { Route as StudioIdRouteImport } from './routes/studio.$id'
 import { Route as StudioCreateRouteImport } from './routes/studio.create'
 import { Route as CreatorSlugPlayRouteImport } from './routes/$creator.$slug.play'
+import { Route as APermalinkPlayRouteImport } from './routes/a.$permalink.play'
 import { Route as ApiOgIdRouteImport } from './routes/api.og.$id'
 import { Route as ApiPreviewsIdRouteImport } from './routes/api.previews.$id'
 import { Route as NNaddrPlayRouteImport } from './routes/n.$naddr.play'
@@ -97,6 +101,16 @@ const NetworkRoute = NetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -118,6 +132,11 @@ const DotwellKnownNappletDotjsonRoute =
     path: '/.well-known/napplet.json',
     getParentRoute: () => rootRouteImport,
   } as any)
+const APermalinkRoute = APermalinkRouteImport.update({
+  id: '/a/$permalink',
+  path: '/a/$permalink',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminRoute = ApiAdminRouteImport.update({
   id: '/api/admin',
   path: '/api/admin',
@@ -198,6 +217,11 @@ const CreatorSlugPlayRoute = CreatorSlugPlayRouteImport.update({
   path: '/play',
   getParentRoute: () => CreatorSlugRoute,
 } as any)
+const APermalinkPlayRoute = APermalinkPlayRouteImport.update({
+  id: '/play',
+  path: '/play',
+  getParentRoute: () => APermalinkRoute,
+} as any)
 const ApiOgIdRoute = ApiOgIdRouteImport.update({
   id: '/api/og/$id',
   path: '/api/og/$id',
@@ -245,10 +269,13 @@ export interface FileRoutesByFullPath {
   '/gg': typeof GgRoute
   '/manage': typeof ManageRoute
   '/network': typeof NetworkRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRouteWithChildren
   '/studio-connect': typeof StudioConnectRoute
   '/$creator/$slug': typeof CreatorSlugRouteWithChildren
   '/.well-known/napplet.json': typeof DotwellKnownNappletDotjsonRoute
+  '/a/$permalink': typeof APermalinkRouteWithChildren
   '/api/admin': typeof ApiAdminRoute
   '/api/admin-access': typeof ApiAdminAccessRoute
   '/api/health': typeof ApiHealthRoute
@@ -265,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/studio/create': typeof StudioCreateRoute
   '/studio/': typeof StudioIndexRoute
   '/$creator/$slug/play': typeof CreatorSlugPlayRoute
+  '/a/$permalink/play': typeof APermalinkPlayRoute
   '/api/og/$id': typeof ApiOgIdRoute
   '/api/previews/$id': typeof ApiPreviewsIdRouteWithChildren
   '/n/$naddr/play': typeof NNaddrPlayRoute
@@ -284,9 +312,12 @@ export interface FileRoutesByTo {
   '/gg': typeof GgRoute
   '/manage': typeof ManageRoute
   '/network': typeof NetworkRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio-connect': typeof StudioConnectRoute
   '/$creator/$slug': typeof CreatorSlugRouteWithChildren
   '/.well-known/napplet.json': typeof DotwellKnownNappletDotjsonRoute
+  '/a/$permalink': typeof APermalinkRouteWithChildren
   '/api/admin': typeof ApiAdminRoute
   '/api/admin-access': typeof ApiAdminAccessRoute
   '/api/health': typeof ApiHealthRoute
@@ -303,6 +334,7 @@ export interface FileRoutesByTo {
   '/studio/create': typeof StudioCreateRoute
   '/studio': typeof StudioIndexRoute
   '/$creator/$slug/play': typeof CreatorSlugPlayRoute
+  '/a/$permalink/play': typeof APermalinkPlayRoute
   '/api/og/$id': typeof ApiOgIdRoute
   '/api/previews/$id': typeof ApiPreviewsIdRouteWithChildren
   '/n/$naddr/play': typeof NNaddrPlayRoute
@@ -323,10 +355,13 @@ export interface FileRoutesById {
   '/gg': typeof GgRoute
   '/manage': typeof ManageRoute
   '/network': typeof NetworkRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRouteWithChildren
   '/studio-connect': typeof StudioConnectRoute
   '/$creator/$slug': typeof CreatorSlugRouteWithChildren
   '/.well-known/napplet.json': typeof DotwellKnownNappletDotjsonRoute
+  '/a/$permalink': typeof APermalinkRouteWithChildren
   '/api/admin': typeof ApiAdminRoute
   '/api/admin-access': typeof ApiAdminAccessRoute
   '/api/health': typeof ApiHealthRoute
@@ -343,6 +378,7 @@ export interface FileRoutesById {
   '/studio/create': typeof StudioCreateRoute
   '/studio/': typeof StudioIndexRoute
   '/$creator/$slug/play': typeof CreatorSlugPlayRoute
+  '/a/$permalink/play': typeof APermalinkPlayRoute
   '/api/og/$id': typeof ApiOgIdRoute
   '/api/previews/$id': typeof ApiPreviewsIdRouteWithChildren
   '/n/$naddr/play': typeof NNaddrPlayRoute
@@ -364,10 +400,13 @@ export interface FileRouteTypes {
     | '/gg'
     | '/manage'
     | '/network'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/studio'
     | '/studio-connect'
     | '/$creator/$slug'
     | '/.well-known/napplet.json'
+    | '/a/$permalink'
     | '/api/admin'
     | '/api/admin-access'
     | '/api/health'
@@ -384,6 +423,7 @@ export interface FileRouteTypes {
     | '/studio/create'
     | '/studio/'
     | '/$creator/$slug/play'
+    | '/a/$permalink/play'
     | '/api/og/$id'
     | '/api/previews/$id'
     | '/n/$naddr/play'
@@ -403,9 +443,12 @@ export interface FileRouteTypes {
     | '/gg'
     | '/manage'
     | '/network'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/studio-connect'
     | '/$creator/$slug'
     | '/.well-known/napplet.json'
+    | '/a/$permalink'
     | '/api/admin'
     | '/api/admin-access'
     | '/api/health'
@@ -422,6 +465,7 @@ export interface FileRouteTypes {
     | '/studio/create'
     | '/studio'
     | '/$creator/$slug/play'
+    | '/a/$permalink/play'
     | '/api/og/$id'
     | '/api/previews/$id'
     | '/n/$naddr/play'
@@ -441,10 +485,13 @@ export interface FileRouteTypes {
     | '/gg'
     | '/manage'
     | '/network'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/studio'
     | '/studio-connect'
     | '/$creator/$slug'
     | '/.well-known/napplet.json'
+    | '/a/$permalink'
     | '/api/admin'
     | '/api/admin-access'
     | '/api/health'
@@ -461,6 +508,7 @@ export interface FileRouteTypes {
     | '/studio/create'
     | '/studio/'
     | '/$creator/$slug/play'
+    | '/a/$permalink/play'
     | '/api/og/$id'
     | '/api/previews/$id'
     | '/n/$naddr/play'
@@ -481,9 +529,12 @@ export interface RootRouteChildren {
   GgRoute: typeof GgRoute
   ManageRoute: typeof ManageRoute
   NetworkRoute: typeof NetworkRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRouteWithChildren
   StudioConnectRoute: typeof StudioConnectRoute
   DotwellKnownNappletDotjsonRoute: typeof DotwellKnownNappletDotjsonRoute
+  APermalinkRoute: typeof APermalinkRouteWithChildren
   ApiAdminRoute: typeof ApiAdminRoute
   ApiAdminAccessRoute: typeof ApiAdminAccessRoute
   ApiHealthRoute: typeof ApiHealthRoute
@@ -572,6 +623,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NetworkRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio': {
       id: '/studio'
       path: '/studio'
@@ -598,6 +663,13 @@ declare module '@tanstack/react-router' {
       path: '/.well-known/napplet.json'
       fullPath: '/.well-known/napplet.json'
       preLoaderRoute: typeof DotwellKnownNappletDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/a/$permalink': {
+      id: '/a/$permalink'
+      path: '/a/$permalink'
+      fullPath: '/a/$permalink'
+      preLoaderRoute: typeof APermalinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin': {
@@ -712,6 +784,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CreatorSlugPlayRouteImport
       parentRoute: typeof CreatorSlugRoute
     }
+    '/a/$permalink/play': {
+      id: '/a/$permalink/play'
+      path: '/play'
+      fullPath: '/a/$permalink/play'
+      preLoaderRoute: typeof APermalinkPlayRouteImport
+      parentRoute: typeof APermalinkRoute
+    }
     '/api/og/$id': {
       id: '/api/og/$id'
       path: '/api/og/$id'
@@ -812,6 +891,18 @@ const StudioRouteChildren: StudioRouteChildren = {
 const StudioRouteWithChildren =
   StudioRoute._addFileChildren(StudioRouteChildren)
 
+interface APermalinkRouteChildren {
+  APermalinkPlayRoute: typeof APermalinkPlayRoute
+}
+
+const APermalinkRouteChildren: APermalinkRouteChildren = {
+  APermalinkPlayRoute: APermalinkPlayRoute,
+}
+
+const APermalinkRouteWithChildren = APermalinkRoute._addFileChildren(
+  APermalinkRouteChildren,
+)
+
 interface NNaddrRouteChildren {
   NNaddrPlayRoute: typeof NNaddrPlayRoute
 }
@@ -860,9 +951,12 @@ const rootRouteChildren: RootRouteChildren = {
   GgRoute: GgRoute,
   ManageRoute: ManageRoute,
   NetworkRoute: NetworkRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRouteWithChildren,
   StudioConnectRoute: StudioConnectRoute,
   DotwellKnownNappletDotjsonRoute: DotwellKnownNappletDotjsonRoute,
+  APermalinkRoute: APermalinkRouteWithChildren,
   ApiAdminRoute: ApiAdminRoute,
   ApiAdminAccessRoute: ApiAdminAccessRoute,
   ApiHealthRoute: ApiHealthRoute,

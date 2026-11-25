@@ -14,6 +14,7 @@ import { NameButton } from './name-button';
 import { NappletSocial } from './social-panel';
 import { RemixButton } from './remix-button';
 import { usePlayRoute } from '@/lib/use-play-route';
+import { publicDetailPath } from '../../../../packages/backend/src/public-model';
 
 export function Detail({ napplet, pinned = false }: { napplet: Napplet; pinned?: boolean }) {
   const play = usePlayRoute();
@@ -29,6 +30,11 @@ export function Detail({ napplet, pinned = false }: { napplet: Napplet; pinned?:
       manifest={pinned ? napplet.snapshot : napplet.current}
       title={napplet.title}
       relays={napplet.relays ?? []}
+      sharePath={
+        pinned
+          ? `/r/${napplet.snapshot.id}`
+          : publicDetailPath({ ...napplet, revisionId: napplet.snapshot.id }, true)
+      }
     >
       {({ actions, feedback, discussion }) => (
         <section className="detail-page">

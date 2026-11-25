@@ -121,7 +121,31 @@ test('production SSR, signed named routes and social actions work through a real
     expect(named.status).toBe(200);
     const html = await named.text();
     expect(html).toContain(fixture.title);
-    expect(html).toContain(`content="${origin}/@browser-author/first"`);
+    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+    expect(canonical).toMatch(new RegExp(`/a/${fixture.slug}-[0-9a-f]{12}$`));
+    expect(html).toContain(`property="og:url" content="${canonical}"`);
+    const canonicalHtml = await (await fetch(canonical!)).text();
+    expect(canonicalHtml).toContain(`property="og:title" content="${fixture.title}"`);
+    expect(canonicalHtml).toContain(`rel="canonical" href="${canonical}"`);
+    const offline = await browser.newPage();
+    try {
+      await offline.routeWebSocket(/.*/, (socket) => socket.close());
+      await offline.goto(`${origin}/@space-lab`);
+      const link = offline.getByRole('link', { name: fixture.title, exact: true });
+      expect(new URL((await link.getAttribute('href'))!, origin).href).toBe(canonical!);
+      await offline.evaluate(() => {
+        document.documentElement.dataset.navigationTest = 'same-tab';
+      });
+      await link.click();
+      await offline.waitForURL(canonical!);
+      await offline.getByRole('heading', { name: fixture.title + '.', exact: true }).waitFor();
+      expect(await offline.locator('html').getAttribute('data-navigation-test')).toBe('same-tab');
+      expect(await offline.locator('meta[property="og:url"]').getAttribute('content')).toBe(
+        canonical!,
+      );
+    } finally {
+      await offline.close();
+    }
     await page.keyboard.press('Escape');
     let releasePost!: () => void;
     const postGate = new Promise<void>((resolve) => {

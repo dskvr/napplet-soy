@@ -3,12 +3,17 @@ import { sourceBrowser } from '../../../../packages/backend/src/source';
 import { sourceInput } from '../../../../packages/client/src/source';
 import { createServerFn, createIsomorphicFn, createServerOnlyFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { gallerySearchSchema } from '../../../../packages/protocol/src';
+import {
+  decodeAddress,
+  identityAddress,
+  gallerySearchSchema,
+} from '../../../../packages/protocol/src';
 import { gallery, resolveNapplet } from '../../../../packages/backend/src/catalog';
 import {
   catalogStatus,
   resolvePublicNapplet,
 } from '../../../../packages/backend/src/public-catalog';
+import { withPublicationLink } from '../../../../packages/backend/src/publication-link';
 import { siteOrigin } from '../../../../packages/backend/src/site-origin';
 import { indexedLookup, indexStore } from '../../../../packages/backend/src/indexed-catalog';
 import { newerManifest } from '../../../../packages/backend/src/index-store';
@@ -61,6 +66,7 @@ async function lookupNapplet(data: z.infer<typeof lookupSchema>) {
   return napplet
     ? {
         ...napplet,
+        permalink: data.type === 'snapshot' ? undefined : withPublicationLink(napplet).permalink,
         relays: 'relays' in napplet ? napplet.relays : (await catalogStatus()).relays,
         siteOrigin: siteOrigin(),
       }
@@ -146,6 +152,27 @@ const getReadmeSSR = createServerOnlyFn(({ data }: Options<string>) =>
   ),
 );
 
+export const getPublication = createServerFn({ method: 'GET' })
+  .validator(z.string().max(121))
+  .handler(async ({ data }) => {
+    if (!process.env.SPACE_COMMUNITY_DIR || !/^[a-z0-9-]{1,56}-[0-9a-f]{12,64}$/.test(data))
+      return null;
+    const naddr = communityStore().publicationAddress(data);
+    // The mapping survives withdrawal. Resolve the current, visible listing
+    // before serving the page, including on in-app navigation with offline relays.
+    return naddr ? lookupNapplet({ type: 'address', naddr }) : null;
+  });
+
+const getExistingPublicationLink = createServerFn({ method: 'GET' })
+  .validator(z.string().max(4096))
+  .handler(async ({ data }) => {
+    if (!process.env.SPACE_COMMUNITY_DIR) return null;
+    const known = communityStore().publicationLink(identityAddress(decodeAddress(data)));
+    if (known) return known;
+    const listing = await lookupNapplet({ type: 'address', naddr: data });
+    return listing?.permalink ?? null;
+  });
+
 export const getCreatorNames = createServerFn({ method: 'GET' })
   .validator(z.string().regex(/^@[a-z0-9-]{1,32}$/))
   .handler(async ({ data }) => {
@@ -179,10 +206,20 @@ export const getNapplet = createIsomorphicFn()
     if (data.type === 'named') {
       const aliases = await getCreatorNames({ data: data.creator });
       const alias = aliases.find((a) => a.slug === data.slug);
-      return alias ? lookupProtocol({ type: 'address', naddr: alias.naddr }) : null;
+      if (!alias) return null;
+      return lookupLinkedAddress(alias.naddr);
     }
-    return lookupProtocol(data);
+    return data.type === 'address' ? lookupLinkedAddress(data.naddr) : lookupProtocol(data);
   });
+async function lookupLinkedAddress(naddr: string) {
+  const n = await lookupProtocol({ type: 'address', naddr });
+  if (!n || n.permalink) return n;
+  // A client can discover a publication on user-selected relays even when
+  // this site's optional name registry is offline or has never observed it.
+  const permalink = await getExistingPublicationLink({ data: naddr }).catch(() => null);
+  return permalink ? { ...n, permalink } : n;
+}
+
 export const getDiscoveredNapplet = createIsomorphicFn()
   .server(getDiscoveredNappletSSR)
   .client(async (options: Parameters<typeof getDiscoveredNappletSSR>[0]) => {

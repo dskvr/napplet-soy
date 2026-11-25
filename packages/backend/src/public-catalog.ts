@@ -1,3 +1,4 @@
+import { withPublicationLink } from './publication-link';
 import { validatedVideo } from '../../protocol/src/preview-video';
 import { blocked, manifestBlocked } from '../../moderation/src/policy';
 import { resolve } from 'node:path';
@@ -147,16 +148,18 @@ export async function communityEntries() {
       }
     }
   }
-  return [...winners.values()].filter((entry) => {
-    if (entry.manifest.kind !== 5129) return true;
-    if (paired.has(entry.revisionId)) return false;
-    const presentationAddress = snapshotPresentationAddress(entry.manifest, entry.metadata);
-    const target = presentationAddress && winners.get(presentationAddress);
-    if (target && target.manifest.created_at >= entry.manifest.created_at) return false;
-    const address = legacySnapshotAddress(entry.manifest);
-    // Keep snapshot URLs, but show one gallery card when its own author's current exists.
-    return !address || address.split(':')[1] !== entry.pubkey || !winners.has(address);
-  });
+  return [...winners.values()]
+    .filter((entry) => {
+      if (entry.manifest.kind !== 5129) return true;
+      if (paired.has(entry.revisionId)) return false;
+      const presentationAddress = snapshotPresentationAddress(entry.manifest, entry.metadata);
+      const target = presentationAddress && winners.get(presentationAddress);
+      if (target && target.manifest.created_at >= entry.manifest.created_at) return false;
+      const address = legacySnapshotAddress(entry.manifest);
+      // Keep snapshot URLs, but show one gallery card when its own author's current exists.
+      return !address || address.split(':')[1] !== entry.pubkey || !winners.has(address);
+    })
+    .map(withPublicationLink);
 }
 export async function publicArtifact(hash: string) {
   const directory = publicDirectory();

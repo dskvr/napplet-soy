@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { NappletCard as Card } from '../../../../packages/backend/src/catalog';
 import {
   hasPublicPreview,
+  publicDetailPath,
   publicPoster,
   publicLink,
   type PublicNapplet,
@@ -49,6 +50,7 @@ export function NappletCard({
   }, [playing]);
   const external = 'provenance' in napplet;
   const playable = !external || napplet.availability === 'ready';
+  const target = external ? napplet : { ...napplet, revisionId: napplet.snapshotId };
   const share = (
     <CardShare
       title={napplet.title}
@@ -58,19 +60,16 @@ export function NappletCard({
         topics: napplet.topics,
         media: external ? shareMedia(napplet) : undefined,
       })}
-      path={
-        napplet.naddr
-          ? `/n/${napplet.naddr}`
-          : `/r/${external ? napplet.revisionId : napplet.snapshotId}`
-      }
+      path={publicDetailPath(target, true)}
     />
   );
-  const link = external
-    ? publicLink(napplet)
-    : {
-        to: '/$creator/$slug' as const,
-        params: { creator: `@${napplet.handle}`, slug: napplet.slug },
-      };
+  const link =
+    external || target.permalink
+      ? publicLink(target)
+      : {
+          to: '/$creator/$slug' as const,
+          params: { creator: `@${napplet.handle}`, slug: napplet.slug },
+        };
   return (
     <article
       ref={article}

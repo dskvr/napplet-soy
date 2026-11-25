@@ -2,6 +2,28 @@
 
 The website now ingests ordinary signed napplets through an independent, read-only Applesauce worker. Publication does not call a privileged import endpoint. Any author publishing a supported manifest to an indexed relay follows the same path into the gallery, address route, snapshot route, artifact delivery, and linked/generated previews.
 
+## Public URLs and search discovery
+
+For an addressable publication, the shell assigns a permanent detail URL such as
+`/a/faultline-0123456789ab`. The first title the shell observes supplies the
+readable part. The suffix comes from a hash of the Nostr kind, author and
+identifier. A collision lengthens the new suffix. The community database keeps
+the assignment across renames, updates and deployments. Include that database
+in backups when moving the site.
+
+The detail page, its `/play` view, existing `/n/{naddr}` links and creator-named
+links all advertise the same canonical detail URL. Open Graph and Twitter cards
+use the current publication's title, description and preview. A pinned
+`/r/{event}` link has its own canonical URL and preview for that revision.
+Installations without the name registry use a portable Nostr address.
+
+`/robots.txt` advertises `/sitemap.xml` on the configured site origin. The
+sitemap lists public guides, Game Grid, gallery pages and playable publications
+from the moderated catalogue. A publication's modification date comes from its
+signed release. Removed, expired and blocked listings drop out on revalidation.
+Unfiltered gallery pages have individual canonical URLs. Search and filter
+results carry `noindex, follow`.
+
 ## Operation
 
 `bun run dev` and `bun run dev:prod` start `napplet-local-indexer` under the checkout's PM2 instance. State lives at `.local/services/index`. The VPS script starts `napplet-indexer` with durable state at `/var/lib/napplet-space/index`, checks its release/heartbeat before completing activation, and includes the process in rollback. Caddy needs no new origin or port.

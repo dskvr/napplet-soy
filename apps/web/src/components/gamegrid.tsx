@@ -28,6 +28,7 @@ import { isGame, matchesGallery } from '../../../../packages/protocol/src/topics
 import { socialScope } from '../../../../packages/protocol/src/social';
 import {
   hasPublicPreview,
+  publicDetailPath,
   publicPoster,
   publicPreviewVideo,
   type PublicNapplet,
@@ -137,14 +138,25 @@ function GameCard({
 }) {
   const { ready } = useNostr();
   const playable = napplet.availability === 'ready';
+  const canLaunch = (event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>) =>
+    ready && playable && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
   return (
-    <button
-      type="button"
+    <a
+      href={publicDetailPath(napplet, true)}
       className="gg-card"
       data-game-id={napplet.revisionId}
-      disabled={!ready || !playable}
-      aria-label={`${playable ? 'Play' : 'Unavailable'} ${napplet.title}`}
-      onClick={() => launch(napplet)}
+      data-playable={playable}
+      aria-label={`${playable ? 'Play' : 'View'} ${napplet.title}`}
+      onClick={(event) => {
+        if (event.button !== 0 || !canLaunch(event)) return;
+        event.preventDefault();
+        launch(napplet);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== ' ' || !canLaunch(event)) return;
+        event.preventDefault();
+        if (!event.repeat) launch(napplet);
+      }}
     >
       <PreviewCover
         revision={napplet.revisionId}
@@ -182,7 +194,7 @@ function GameCard({
           )}
         </span>
       </span>
-    </button>
+    </a>
   );
 }
 

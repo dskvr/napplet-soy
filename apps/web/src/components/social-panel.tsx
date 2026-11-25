@@ -52,6 +52,7 @@ export function NappletSocial({
   manifest,
   relays,
   presentation,
+  sharePath,
   children,
 }: {
   reference: string;
@@ -59,6 +60,7 @@ export function NappletSocial({
   manifest: SignedEvent;
   relays: string[];
   presentation?: Pick<PublicNapplet, 'description' | 'metadata' | 'video' | 'preview'>;
+  sharePath: string;
   children: (slots: {
     actions: ReactNode;
     feedback: ReactNode;
@@ -272,7 +274,7 @@ export function NappletSocial({
       </ActionButton>
       <CardShare
         title={title}
-        path={reference.startsWith('naddr1') ? `/n/${reference}` : `/r/${reference}`}
+        path={sharePath}
         note={() => ({
           title,
           description: presentation?.description ?? manifestDescription(manifest),

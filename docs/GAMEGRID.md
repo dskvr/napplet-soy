@@ -26,6 +26,9 @@ instead of substituting unrelated games.
   creator-supplied categorization, not proof that a game supports a controller.
 - Continue is device-local play history, not a cloud save. The running napplet's
   storage follows the normal shell rules. Returning to the grid restores the tile.
+- Each tile links to the game's public detail page. Opening it in another tab or
+  following it before the shell loads opens that page. During browsing, a click,
+  tap, Enter, Space or controller A launches a playable game in the grid.
 - An active search shows one grid of matching games with pagination, without
   featured or ranking sections. Clearing search restores the selected collection;
   choosing a collection clears search.

@@ -2,12 +2,31 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { finalizeEvent, generateSecretKey } from 'nostr-tools';
 import records from '../../packages/backend/data/catalog.json';
-import { OG_VERSION } from '../../packages/backend/src/public-model';
+import { OG_VERSION, publicNapplet } from '../../packages/backend/src/public-model';
+import { IndexStore } from '../../packages/backend/src/index-store';
+import { decodeAddress, encodeAddress } from '../../packages/protocol/src';
 
 test('production HTML exposes one absolute OG image on main, profile and napplet routes without JavaScript', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'napplet-og-routes-'));
   const root = resolve(import.meta.dir, '../..');
+  const indexDir = join(directory, 'index');
+  const index = new IndexStore(indexDir, true);
+  const secret = generateSecretKey();
+  for (let i = 0; i < 25; i++) {
+    const fixture = records[0].current;
+    const event = finalizeEvent(
+      {
+        ...fixture,
+        tags: [...fixture.tags.filter(([t]) => t !== 'd'), ['d', `pagination-${i}`]],
+      },
+      secret,
+    );
+    index.admit(event);
+    index.project(event.id, { ...(await publicNapplet(event)), availability: 'ready' }, 0, 0);
+  }
+  index.close();
   const web = Bun.spawn([process.execPath, join(root, 'apps/web/server.ts')], {
     // Also verifies that shipped fonts/mascot resolve independently of the CWD.
     cwd: directory,
@@ -17,6 +36,7 @@ test('production HTML exposes one absolute OG image on main, profile and napplet
       PORT: '0',
       SPACE_SITE_ORIGIN: 'https://share.example',
       SPACE_COMMUNITY_DIR: join(directory, 'community'),
+      SPACE_INDEX_DIR: indexDir,
     },
     stdout: 'pipe',
     stderr: 'inherit',
@@ -42,8 +62,23 @@ test('production HTML exposes one absolute OG image on main, profile and napplet
       })();
     }
     const n = records[0];
+    const publication = await fetch(`${site}/n/${n.naddr}`);
+    let preferred = '';
+    await new HTMLRewriter()
+      .on('link[rel=canonical]', {
+        element(el) {
+          preferred = el.getAttribute('href') ?? '';
+        },
+      })
+      .transform(publication)
+      .text();
+    expect(preferred).toMatch(/^https:\/\/share\.example\/a\/[a-z0-9-]+-[a-f0-9]{12,64}$/);
+    const currentPath = new URL(preferred).pathname;
+    const alternateAddress = encodeAddress(decodeAddress(n.naddr), ['wss://relay.example']);
     const routes = [
       ['/', 'site'],
+      ['/?page=2', 'site'],
+      ['/?q=sample', 'site'],
       ['/about', 'site'],
       ['/create', 'site'],
       ['/docs', 'site'],
@@ -57,6 +92,9 @@ test('production HTML exposes one absolute OG image on main, profile and napplet
       [`/@space-lab/${n.slug}/play`, n.snapshot.id],
       [`/n/${n.naddr}`, n.snapshot.id],
       [`/n/${n.naddr}/play`, n.snapshot.id],
+      [`/n/${alternateAddress}`, n.snapshot.id],
+      [currentPath, n.snapshot.id],
+      [`${currentPath}/play`, n.snapshot.id],
       [`/r/${n.snapshot.id}`, n.snapshot.id],
       [`/r/${n.snapshot.id}/play`, n.snapshot.id],
       [`/r/${n.snapshot.id}/source?view=html`, n.snapshot.id],
@@ -68,7 +106,13 @@ test('production HTML exposes one absolute OG image on main, profile and napplet
       });
       expect(response.status, path).toBe(200);
       const meta = new Map<string, string[]>();
+      const canonicals: string[] = [];
       await new HTMLRewriter()
+        .on('link[rel=canonical]', {
+          element(el) {
+            canonicals.push(el.getAttribute('href') ?? '');
+          },
+        })
         .on('meta', {
           element(el) {
             const key = el.getAttribute('property') ?? el.getAttribute('name');
@@ -78,6 +122,20 @@ test('production HTML exposes one absolute OG image on main, profile and napplet
         .transform(response)
         .text();
       const image = meta.get('og:image');
+      if (path === '/?q=sample') {
+        expect(meta.get('robots')).toEqual(['noindex, follow']);
+        expect(canonicals).toEqual([]);
+      }
+      if (path === '/?page=2' || path === '/' || expected === n.snapshot.id) {
+        const canonical =
+          expected !== n.snapshot.id
+            ? `https://share.example${path}`
+            : path.startsWith('/r/')
+              ? `https://share.example/r/${n.snapshot.id}`
+              : preferred;
+        expect(canonicals, path).toEqual([canonical]);
+        expect(meta.get('og:url'), path).toEqual([canonical]);
+      }
       expect(image, path).toHaveLength(1);
       expect(meta.get('twitter:image'), path).toEqual(image);
       expect(meta.get('og:image:width'), path).toEqual(['1200']);
