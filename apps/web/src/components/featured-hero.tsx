@@ -1,3 +1,5 @@
+import { useDiscoveryLink } from './discovery-navigation';
+import { isGame } from '../../../../packages/protocol/src/topics';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Pause, Play, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -20,6 +22,7 @@ export function FeaturedHero({
   initial: PublicNapplet[];
   empty: React.ReactNode;
 }) {
+  const origin = useDiscoveryLink();
   const [entries, setEntries] = useState(initial);
   const [selection, setSelection] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
@@ -212,6 +215,7 @@ export function FeaturedHero({
             >
               <Link
                 {...publicLink(entry)}
+                {...origin}
                 className="featured-art"
                 aria-label={`Explore featured napplet: ${entry.title}`}
                 draggable={false}
@@ -226,13 +230,17 @@ export function FeaturedHero({
                   loading={slide === 0 ? 'eager' : 'lazy'}
                   referrerPolicy="no-referrer"
                 />
-                <span className="featured-open">
-                  <ArrowUpRight size={22} />
+                <span className="featured-open featured-action">
+                  {isGame(entry) ? 'Play ' : 'Try '}
+                  {entry.title}
+                  <ArrowUpRight size={17} />
                 </span>
               </Link>
             </PreviewCover>
             <div className="featured-caption">
-              <Link {...publicLink(entry)}>{entry.title}</Link>
+              <Link {...publicLink(entry)} {...origin}>
+                {entry.title}
+              </Link>
               <p>{entry.description || 'A little world worth a look.'}</p>
               <CreatorLink pubkey={entry.pubkey} />
             </div>

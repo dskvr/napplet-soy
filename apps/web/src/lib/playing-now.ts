@@ -3,8 +3,13 @@ import {
   entryRef,
   joinConvention,
   type RoomEntry,
+  type DirectoryRow,
 } from '../../../../packages/multiplayer/src/directory';
 import { intentContracts } from '../../../../packages/runtime/src/intent-session';
+
+export function acceptsRoomEntry(event: Pick<SignedEvent, 'tags'>) {
+  return intentContracts(event.tags).some((c) => c.convention === joinConvention);
+}
 
 export function roomPath(entry: RoomEntry) {
   const ref = entryRef.parse(entry);
@@ -23,7 +28,7 @@ export function verifiedRoomEntry(href: string, event: SignedEvent, provider?: s
       !match ||
       !provider ||
       provider !== url.searchParams.get('provider') ||
-      !intentContracts(event.tags).some((c) => c.convention === joinConvention)
+      !acceptsRoomEntry(event)
     )
       return;
     const addr = decodeAddress(match[1]);
@@ -43,4 +48,13 @@ export function verifiedRoomEntry(href: string, event: SignedEvent, provider?: s
   } catch {
     return;
   }
+}
+
+/** Reuse the provider's validated directory and compare signed publication identities, ignoring hints. */
+export function openRoomFor(rows: DirectoryRow[], naddr: string, now = Date.now()) {
+  const address = encodeAddress(decodeAddress(naddr));
+  return rows.find(
+    (r) =>
+      r.entry.napplet === address && r.accepting && r.players < r.capacity && r.expiresAt > now,
+  );
 }

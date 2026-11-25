@@ -38,7 +38,8 @@ test('production shell renders account-backed Studio and preserves missing-route
       expect(response.status).toBe(200);
       const html = await response.text();
       expect(html).toContain('Opening Studio');
-      expect(html).toContain('Create in browser');
+      expect(html).toContain('header-create-menu');
+      expect(html).toContain('Search napplets');
       expect(html).not.toContain('NostrProvider missing');
     }
     for (const path of ['media', 'resources', 'relay-read']) {

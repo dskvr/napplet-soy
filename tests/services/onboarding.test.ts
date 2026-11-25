@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createCommand } from '../../apps/web/src/lib/creator-commands';
 import { walkthrough } from '../../apps/web/src/lib/creator-walkthrough';
 
-test('hero onboarding works without sign-in, fits the initial viewport and loads video only on demand', async () => {
+test('hero onboarding works without sign-in, adapts to mobile discovery and loads video only on demand', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'napplet-onboarding-'));
   const server = Bun.spawn([process.execPath, 'apps/web/server.ts'], {
     env: {
@@ -45,10 +45,11 @@ test('hero onboarding works without sign-in, fits the initial viewport and loads
     ]) {
       await staticPage.setViewportSize({ width, height });
       const command = await staticPage.locator('.hero .terminal-box').boundingBox();
-      expect(
-        command!.y + command!.height,
-        `command below fold at ${width}x${height}`,
-      ).toBeLessThanOrEqual(height);
+      if (width > 960) expect(command!.y + command!.height).toBeLessThanOrEqual(height);
+      else {
+        await browserExpect(staticPage.getByRole('heading', { level: 1 })).toBeInViewport();
+        expect(command!.width).toBeLessThanOrEqual(width);
+      }
       expect(
         await staticPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       ).toBe(true);

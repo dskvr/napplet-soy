@@ -168,13 +168,22 @@ Immutable snapshots are deliberately not converted: their new independent
 identity would not preserve the old thread/storage. Old links remain playable
 through the legacy reader without any migration.
 
-## Help people find the right kind of napplet
+## Choosing archetypes for discovery
 
-Choose a coarse `archetypes` label for the primary experience: `game`, `utility`, or
-`digital-art`, for example. These are examples, not an exhaustive registry. Keep
-specific `topics` such as racing or generative-art (including existing game tags).
-Publishers write `z` and `t` separately. Archetypes neither grant capabilities
-nor imply that a game is online. Only declare an intent that the app handles.
+When a napplet has a recognizable purpose, add its role to the optional
+`archetypes` array in `napplet.json`. For example, a racing game could use
+`"archetypes": ["game"]` and `"topics": ["racing", "arcade"]`. The publisher
+writes one `["z", "game"]` tag and separate `t` tags for those topics.
+Keep existing topic tags when adding a role. A napplet can advertise several
+roles it actually serves, or omit archetypes entirely.
+
+Consult the [archetype field guide](https://archetypes.napplet.run/) when
+choosing a name. It reports spellings observed on public relays. Reuse an
+existing spelling when it fits (for example, `text-editor`); otherwise choose
+a descriptive new name. The field guide is optional and publishing works
+without contacting it. Its suggested synonyms are not interchangeable IDs.
+Only declare an accepted intent when the app implements that action. For example,
+a `game` archetype alone promises neither multiplayer nor a join handler.
 
 The [selected NIP-5D amendment](https://github.com/dskvr/nips/blob/f60550c3409d6d81a875088ec83e660571e10504/5D.md#shell-handlers)
 adds optional NIP-89 shell handler advertisements. A shell's bare `N` tags

@@ -120,6 +120,7 @@ test('featured hero, ordered admin curation, membership and remembered extension
     await page.goto(`${origin}/admin`);
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
     refused = true; // Automatic policy loading must surface refusal without logging out.
+    await page.getByRole('button', { name: 'Extension', exact: true }).click();
     await page.getByRole('button', { name: 'Connect browser extension' }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
     const accountButton = page
@@ -257,7 +258,11 @@ test('featured hero, ordered admin curation, membership and remembered extension
     expect(await hero.getByRole('button', { name: /featured rotation/ }).count()).toBe(0);
     await page.goto(`${origin}/?q=does-not-exist`);
     await browserExpect(page.locator('.napplet-grid .napplet-card')).toHaveCount(0);
-    await hero.waitFor(); // Independent of gallery filters.
+    await browserExpect(hero).toHaveCount(0);
+    await browserExpect(page.getByRole('heading', { name: /Results for/ })).toContainText(
+      'does-not-exist',
+    );
+    await page.goto(origin);
     for (const [width, height] of [
       [390, 844],
       [320, 568],
@@ -270,7 +275,10 @@ test('featured hero, ordered admin curation, membership and remembered extension
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
+      const feature = await hero.boundingBox();
       const command = await page.locator('.hero .starter-command').boundingBox();
+      expect(feature!.y).toBeLessThan(height);
+      expect(feature!.y + feature!.height).toBeLessThanOrEqual(command!.y);
       expect(command).not.toBeNull();
       expect(command!.width).toBeLessThanOrEqual(width);
       await page.locator('.hero .starter-command').scrollIntoViewIfNeeded();
@@ -377,6 +385,7 @@ test('featured hero, ordered admin curation, membership and remembered extension
     memberPage.setDefaultTimeout(12000);
     await memberPage.goto(`${origin}/admin`);
     await memberPage.getByRole('button', { name: 'Connect', exact: true }).click();
+    await memberPage.getByRole('button', { name: 'Extension', exact: true }).click();
     await memberPage.getByRole('button', { name: 'Connect browser extension' }).click();
     await memberPage.getByText('This account is not an administrator.', { exact: true }).waitFor();
     const memberButton = memberPage
@@ -427,6 +436,7 @@ test('featured hero, ordered admin curation, membership and remembered extension
     ).toHaveCount(0);
     await memberPage.unrouteAll({ behavior: 'wait' });
     await membership('admin-remove');
+    await memberPage.getByRole('button', { name: 'Extension', exact: true }).click();
     await memberPage.getByRole('button', { name: 'Connect browser extension' }).click();
     await memberPage.getByText('This account is not an administrator.', { exact: true }).waitFor();
     await memberContext.close();
@@ -443,7 +453,8 @@ test('featured hero, ordered admin curation, membership and remembered extension
     await browserExpect(page.locator('.saved-session')).toHaveCount(0);
     await another.getByRole('button', { name: 'Connect', exact: true }).click();
     await browserExpect(another.locator('.saved-session')).toHaveCount(0);
-    expect(errors).toEqual([]);
+    // Signing into this HTTP loopback fixture cannot start the production HTTPS Studio client.
+    expect(errors.filter((error) => error !== 'Hosted Studio requires HTTPS.')).toEqual([]);
   } finally {
     await browser?.close();
     server.kill();

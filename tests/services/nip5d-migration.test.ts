@@ -166,6 +166,7 @@ test('legacy and standalone wire manifests migrate through relay, Blossom, index
     });
     const freeSnapshot = await standalone(5129, 'Independent snapshot', '', [
       ['z', 'feed'],
+      ['z', 'field-recorder'],
       ['i', 'napplet:feed/open'],
     ]);
     const sameAuthorChild = await standalone(5129, 'Same-author descendant', '', [
@@ -336,23 +337,29 @@ test('legacy and standalone wire manifests migrate through relay, Blossom, index
       .filter({ hasText: 'Invalid icon fallback' })
       .locator('img');
     await ui(fallback).toHaveAttribute('src', new RegExp(`/api/og/${badIcon.id}`));
-    await page.getByText('More filters', { exact: true }).click();
-    for (const label of [
-      'What it does',
-      'Accepted intent',
-      'Required capability',
-      'Optional integration',
-    ])
-      await ui(page.getByRole('combobox', { name: label, exact: true })).toBeVisible();
-    await page.getByRole('combobox', { name: 'What it does', exact: true }).selectOption('feed');
+    const archetype = page.getByRole('combobox', { name: 'Archetype', exact: true });
+    await ui(archetype).toBeVisible();
+    await ui(page.getByRole('link', { name: 'Archetype guide' })).toHaveAttribute(
+      'href',
+      'https://archetypes.napplet.run/',
+    );
+    await archetype.selectOption('field-recorder');
+    await ui(page.locator('.napplet-card')).toHaveCount(1);
+    await ui(page.locator('.napplet-card')).toContainText('Independent snapshot');
+    await archetype.selectOption('feed');
     await ui(page).toHaveURL(/archetype=feed/);
     await ui(page.locator('.napplet-card')).toHaveCount(1);
     await ui(page.locator('.napplet-card')).toContainText('Independent snapshot');
+    await page.getByText('More filters', { exact: true }).click();
+    for (const label of ['Accepted intent', 'Required capability', 'Optional integration'])
+      await ui(page.getByRole('combobox', { name: label, exact: true })).toBeVisible();
     await page
       .getByRole('combobox', { name: 'Accepted intent', exact: true })
       .selectOption('napplet:feed/open');
     await ui(page).toHaveURL(/intent=napplet%3Afeed%2Fopen/);
     await page.getByRole('button', { name: 'Clear these filters', exact: true }).click();
+    await ui(archetype).toHaveValue('feed');
+    await archetype.selectOption('');
     await page.getByText('More filters', { exact: true }).click();
     await page
       .getByRole('combobox', { name: 'Optional integration', exact: true })

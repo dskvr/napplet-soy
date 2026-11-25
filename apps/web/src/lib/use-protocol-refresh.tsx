@@ -5,7 +5,7 @@ import { useRouter } from '@tanstack/react-router';
 export function useProtocolRefresh(
   key: string,
   read: () => Promise<unknown>,
-  onSettled?: () => void,
+  onSettled?: (success: boolean) => void,
 ) {
   const router = useRouter(),
     reader = useRef(read);
@@ -17,16 +17,18 @@ export function useProtocolRefresh(
   useEffect(() => {
     let active = true;
     setError(false);
+    let success = false;
     reader
       .current()
       .then(() => {
+        success = true;
         if (active && !settled.current) return router.invalidate();
       })
       .catch(() => {
         if (active) setError(true);
       })
       .finally(() => {
-        if (active) settled.current?.();
+        if (active) settled.current?.(success);
       });
     return () => {
       active = false;

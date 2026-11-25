@@ -21,3 +21,17 @@ export function TopicTags({
     </nav>
   );
 }
+
+export function ArchetypeLinks({ archetypes }: { archetypes?: readonly string[] }) {
+  if (!archetypes?.length) return null;
+  return (
+    <nav className="detail-archetypes" aria-label="Napplet archetypes">
+      <span>{archetypes.length === 1 ? 'Archetype' : 'Archetypes'}</span>
+      {archetypes.map((archetype) => (
+        <a key={archetype} href={'/?' + new URLSearchParams({ archetype }).toString()}>
+          {archetype}
+        </a>
+      ))}
+    </nav>
+  );
+}

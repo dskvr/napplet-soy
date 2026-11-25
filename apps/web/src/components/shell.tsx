@@ -1,7 +1,7 @@
 import { WalletButton } from './wallet/wallet-button';
 import { AppearanceControl } from '../../../../packages/runtime/src/appearance-control';
 import { Link, useLocation } from '@tanstack/react-router';
-import { ArrowUpRight, CircleAlert, CircleHelp, Radio, Sparkles, Terminal } from 'lucide-react';
+import { ArrowUpRight, CircleAlert, CircleHelp, Radio } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNostr } from './nostr-provider';
@@ -9,7 +9,8 @@ import { PopoverTrigger } from './ui/popover';
 import { ProfileAvatar } from './creator-link';
 import { useProfile } from '@/lib/profiles';
 import { shortPubkey } from '../../../../packages/protocol/src/profile';
-import { StudioLink } from './studio-link';
+import { CreateMenu, HeaderSearch } from './header-discovery';
+import { useRestoreDiscoveryFocus } from './discovery-navigation';
 import { WorkDot } from './work-provider';
 
 function ConnectedIdentity({
@@ -34,6 +35,7 @@ function ConnectedIdentity({
 export function Shell({ children }: { children: ReactNode }) {
   const { pubkey, ready, relayConfigured, needsReconnect } = useNostr();
   const pathname = useLocation({ select: (location) => location.pathname });
+  useRestoreDiscoveryFocus();
   const studio = pathname === '/studio' || pathname.startsWith('/studio/');
   const workspace = /^\/studio\/[a-f0-9-]{36}$/.test(pathname);
   if (pathname === '/gg')
@@ -49,7 +51,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      <header className="site-header">
+      <header className="site-header site-discovery-header">
         <Link to="/" className="brand" aria-label="napplet.soy home">
           <img
             className="brand-mark"
@@ -79,25 +81,8 @@ export function Shell({ children }: { children: ReactNode }) {
             Docs
           </Link>
         </nav>
-        <div className="header-create-actions" aria-label="Create a napplet">
-          <StudioLink
-            path="/create"
-            className="header-create-button browser"
-            data-tone="mint"
-            data-effect="create"
-          >
-            <Sparkles size={16} /> Create in browser
-          </StudioLink>
-          <Link
-            to="/create"
-            hash="local-soyli"
-            className="header-create-button"
-            data-tone="lilac"
-            data-effect="source"
-          >
-            <Terminal size={16} /> Use soyLI locally
-          </Link>
-        </div>
+        <HeaderSearch />
+        <CreateMenu />
         <div className="header-actions">
           <AppearanceControl />
           <Button asChild variant="ghost" size="icon" className="about-link">

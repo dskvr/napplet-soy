@@ -1,14 +1,16 @@
+import { DiscoveryBackLink } from './discovery-navigation';
+import { SaveButton } from './saved-napplets';
+import { manifestArchetypes } from '../../../../packages/protocol/src/manifest';
 import { SourceSection } from './source-section';
 import { LinkedAssets } from './linked-assets';
 import { CreatorLink } from './creator-link';
 import { Genealogy } from './genealogy';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 import { useEventStore } from 'applesauce-react/hooks';
 import { Button } from './ui/button';
 import { Player } from './player';
-import { TopicTags } from './topic-tags';
+import { ArchetypeLinks, TopicTags } from './topic-tags';
 import type { Napplet } from '../../../../packages/backend/src/catalog';
 import { NameButton } from './name-button';
 import { NappletSocial } from './social-panel';
@@ -38,10 +40,7 @@ export function Detail({ napplet, pinned = false }: { napplet: Napplet; pinned?:
     >
       {({ actions, feedback, discussion }) => (
         <section className="detail-page">
-          <Link to="/" className="back-link">
-            <ArrowLeft size={14} />
-            Back to the playground
-          </Link>
+          <DiscoveryBackLink />
           <div className="detail-heading">
             <div>
               <span className="eyebrow">NAPPLET{pinned ? ' / PINNED RELEASE' : ''}</span>
@@ -53,8 +52,15 @@ export function Detail({ napplet, pinned = false }: { napplet: Napplet; pinned?:
               {actions}
             </div>
             <div className="detail-actions">
+              <SaveButton
+                item={{
+                  ...napplet,
+                  naddr: pinned ? null : napplet.naddr,
+                  revisionId: napplet.snapshot.id,
+                }}
+              />
               <Button variant="outline" asChild>
-                <Link to={play.playPath} resetScroll={false}>
+                <Link to={play.playPath} state={play.state} resetScroll={false}>
                   Open player
                 </Link>
               </Button>
@@ -77,6 +83,9 @@ export function Detail({ napplet, pinned = false }: { napplet: Napplet; pinned?:
             <div>
               <h2>A little about this one</h2>
               <p>{napplet.description}</p>
+              <ArchetypeLinks
+                archetypes={pinned ? manifestArchetypes(napplet.snapshot) : napplet.archetypes}
+              />
               <TopicTags topics={napplet.topics} />
               <div className="instructions">↳ {napplet.instructions}</div>
             </div>

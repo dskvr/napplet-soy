@@ -1,16 +1,18 @@
+import { DiscoveryBackLink } from './discovery-navigation';
 import { LifecycleManager } from './lifecycle-manager';
 import { useProtocolRefresh } from '@/lib/use-protocol-refresh';
 import { seedCatalog, findManifest } from '@/lib/protocol-catalog';
+import { SaveButton } from './saved-napplets';
 import { SourceSection } from './source-section';
 import { LinkedAssets } from './linked-assets';
 import { CreatorLink } from './creator-link';
 import { Genealogy } from './genealogy';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, Code2 } from 'lucide-react';
+import { Code2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { useEventStore } from 'applesauce-react/hooks';
 import { Player } from './player';
-import { TopicTags } from './topic-tags';
+import { ArchetypeLinks, TopicTags } from './topic-tags';
 import { Button } from './ui/button';
 import {
   publicDetailPath,
@@ -63,10 +65,7 @@ export function PublicDetail({
     >
       {({ actions, feedback, discussion }) => (
         <section className="detail-page">
-          <Link to="/" className="back-link">
-            <ArrowLeft size={14} />
-            Back to the playground
-          </Link>
+          <DiscoveryBackLink />
           {refresh}
           <div className="detail-heading">
             <div>
@@ -81,6 +80,13 @@ export function PublicDetail({
               {actions}
             </div>
             <div className="detail-actions">
+              <SaveButton
+                item={{
+                  ...napplet,
+                  naddr: pinned ? null : napplet.naddr,
+                  revisionId: napplet.revisionId,
+                }}
+              />
               <Button variant="outline" asChild>
                 <Link
                   to={
@@ -88,6 +94,7 @@ export function PublicDetail({
                       ? play.detailPath
                       : play.playPath
                   }
+                  state={play.state}
                   resetScroll={false}
                 >
                   {play.immersive && napplet.availability !== 'ready'
@@ -141,6 +148,7 @@ export function PublicDetail({
             <div>
               <h2>A little about this one</h2>
               <p>{napplet.description || 'The author has not added a description.'}</p>
+              <ArchetypeLinks archetypes={napplet.archetypes} />
               <TopicTags topics={napplet.topics} />
             </div>
             <aside>

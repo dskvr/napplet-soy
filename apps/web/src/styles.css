@@ -8,6 +8,7 @@
 @import './expressive.css';
 @import './wallet.css';
 @import './gamegrid.css';
+@import './discovery-navigation.css';
 @import '@fontsource/dm-sans/400.css';
 @import '@fontsource/dm-sans/500.css';
 @import '@fontsource/dm-sans/600.css';
@@ -451,8 +452,58 @@ pre:focus-visible {
   font-size: 11px;
   background: transparent;
 }
-.gallery-filters {
+.detail-archetypes {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.detail-archetypes span {
+  color: var(--muted-foreground);
+}
+.detail-archetypes a {
+  text-decoration: underline;
+}
+.gallery-discovery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 22px;
   margin: -8px 0 24px;
+}
+.gallery-archetype,
+.gallery-archetype label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gallery-archetype {
+  max-width: 100%;
+  font-size: 13px;
+}
+.gallery-archetype label {
+  min-width: 0;
+  font-weight: 600;
+}
+.gallery-archetype select {
+  max-width: min(18rem, 85vw);
+  padding: 8px;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.gallery-archetype a {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.gallery-discovery-controls .gallery-filters[open] {
+  flex-basis: 100%;
+}
+.gallery-filters {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;

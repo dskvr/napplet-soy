@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { backendProvider, blocked, manifestAllowed } from '@/lib/network';
 import { availableCatalog, lookupProtocol } from '@/lib/protocol-catalog';
-import { roomPath } from '@/lib/playing-now';
-import {
-  directoryPage,
-  joinConvention,
-  type DirectoryRow,
-} from '../../../../packages/multiplayer/src/directory';
+import { acceptsRoomEntry, openRoomFor, roomPath } from '@/lib/playing-now';
+import { directoryPage, type DirectoryRow } from '../../../../packages/multiplayer/src/directory';
 import { decodeAddress, encodeAddress } from '../../../../packages/protocol/src';
-import { intentContracts } from '../../../../packages/runtime/src/intent-session';
 import type { PublicNapplet } from '../../../../packages/backend/src/public-model';
 type Row = DirectoryRow & { game: string };
-export function PlayingNow({ grid = false }: { grid?: boolean }) {
+const RoomDirectory = createContext<Row[]>([]);
+export function RoomDirectoryProvider({ children }: { children: ReactNode }) {
   const [rows, setRows] = useState<Row[]>([]);
   useEffect(() => {
     const provider = backendProvider();
@@ -59,7 +55,7 @@ export function PlayingNow({ grid = false }: { grid?: boolean }) {
           if (
             n?.availability === 'ready' &&
             manifestAllowed(n.manifest) &&
-            intentContracts(n.manifest.tags).some((c) => c.convention === joinConvention)
+            acceptsRoomEntry(n.manifest)
           )
             next.push({ ...r, game: n.title });
         }
@@ -71,8 +67,7 @@ export function PlayingNow({ grid = false }: { grid?: boolean }) {
                 (a, b) =>
                   Number(b.accepting && b.players < b.capacity) -
                   Number(a.accepting && a.players < a.capacity),
-              )
-              .slice(0, 12),
+              ),
           );
       } catch {
         if (active) setRows((old) => old.filter((r) => r.expiresAt > Date.now()));
@@ -100,12 +95,49 @@ export function PlayingNow({ grid = false }: { grid?: boolean }) {
       void connection?.close();
     };
   }, []);
+  return <RoomDirectory.Provider value={rows}>{children}</RoomDirectory.Provider>;
+}
+
+export function CardJoinRoom({ napplet }: { napplet: PublicNapplet }) {
+  const rows = useContext(RoomDirectory);
+  if (
+    !rows.length ||
+    !napplet.naddr ||
+    napplet.availability !== 'ready' ||
+    !acceptsRoomEntry(napplet.manifest)
+  )
+    return null;
+  const room = openRoomFor(rows, napplet.naddr);
+  if (!room) return null;
+  return (
+    <a
+      className="card-join-room"
+      href={roomPath(room.entry)}
+      aria-label={`Join ${room.title} in ${napplet.title}, ${room.players} of ${room.capacity} players`}
+    >
+      Join room · {room.players}/{room.capacity} players
+    </a>
+  );
+}
+
+export function PlayingNow({ grid = false }: { grid?: boolean }) {
+  return grid ? (
+    <RoomDirectoryProvider>
+      <RoomList grid />
+    </RoomDirectoryProvider>
+  ) : (
+    <RoomList />
+  );
+}
+
+function RoomList({ grid = false }: { grid?: boolean }) {
+  const rows = useContext(RoomDirectory);
   if (!rows.length) return null;
   return (
     <section className={'playing-now ' + (grid ? 'gg-live' : '')} aria-label="Playing now">
       <h2>Playing now</h2>
       <ul>
-        {rows.map((r) => (
+        {rows.slice(0, 12).map((r) => (
           <li key={r.entry.room}>
             <div>
               <strong>{r.game}</strong> · {r.title}

@@ -1,3 +1,4 @@
+import { useDiscoveryLink } from './discovery-navigation';
 import { publicPreviewVideo } from '../../../../packages/backend/src/public-model';
 import { PreviewCover } from './preview-cover';
 import { Link } from '@tanstack/react-router';
@@ -6,6 +7,8 @@ import { TopicTags } from './topic-tags';
 import { Player } from './player';
 import { GalleryCardSocial } from './gallery-social';
 import { CardShare } from './card-share';
+import { SaveButton } from './saved-napplets';
+import { CardJoinRoom } from './playing-now';
 import { shareMedia } from '../../../../packages/client/src/share-note';
 import { CreatorLink } from './creator-link';
 import { useEffect, useLayoutEffect, useRef } from 'react';
@@ -30,6 +33,7 @@ export function NappletCard({
   onPlay?: () => void;
   onStop?: () => void;
 }) {
+  const origin = useDiscoveryLink();
   const article = useRef<HTMLElement>(null);
   const stop = useRef(onStop);
   stop.current = onStop;
@@ -52,16 +56,19 @@ export function NappletCard({
   const playable = !external || napplet.availability === 'ready';
   const target = external ? napplet : { ...napplet, revisionId: napplet.snapshotId };
   const share = (
-    <CardShare
-      title={napplet.title}
-      note={() => ({
-        title: napplet.title,
-        description: napplet.description,
-        topics: napplet.topics,
-        media: external ? shareMedia(napplet) : undefined,
-      })}
-      path={publicDetailPath(target, true)}
-    />
+    <>
+      <SaveButton item={target} compact />
+      <CardShare
+        title={napplet.title}
+        note={() => ({
+          title: napplet.title,
+          description: napplet.description,
+          topics: napplet.topics,
+          media: external ? shareMedia(napplet) : undefined,
+        })}
+        path={publicDetailPath(target, true)}
+      />
+    </>
   );
   const link =
     external || target.permalink
@@ -86,6 +93,7 @@ export function NappletCard({
         >
           <Link
             {...link}
+            {...origin}
             className="card-preview"
             aria-label={`${playable ? 'Play' : 'View'} ${napplet.title}`}
             onClick={(event) => {
@@ -119,7 +127,9 @@ export function NappletCard({
         </PreviewCover>
       )}
       <div className="card-heading">
-        <Link {...link}>{napplet.title}</Link>
+        <Link {...link} {...origin}>
+          {napplet.title}
+        </Link>
         <Link
           to={napplet.naddr ? '/n/$naddr/play' : '/r/$snapshot/play'}
           params={
@@ -127,6 +137,7 @@ export function NappletCard({
               ? { naddr: napplet.naddr }
               : { snapshot: external ? napplet.revisionId : napplet.snapshotId }
           }
+          {...origin}
           className="card-fullscreen"
           aria-label={`Open ${napplet.title} fullscreen`}
           title="Open fullscreen"
@@ -134,6 +145,12 @@ export function NappletCard({
           <Expand size={18} aria-hidden="true" />
         </Link>
       </div>
+      {napplet.description && (
+        <p className="card-description" title={napplet.description}>
+          {napplet.description}
+        </p>
+      )}
+      {external && <CardJoinRoom napplet={napplet} />}
       <div className={`card-meta${external ? ' public-meta' : ''}`}>
         <CreatorLink pubkey={napplet.pubkey} />
         <span>
@@ -165,7 +182,7 @@ export function NappletCard({
       )}
       <TopicTags topics={napplet.topics.slice(0, 3)}>
         {napplet.topics.length > 3 && (
-          <Link {...link} aria-label={`View all tags for ${napplet.title}`}>
+          <Link {...link} {...origin} aria-label={`View all tags for ${napplet.title}`}>
             +{napplet.topics.length - 3}
           </Link>
         )}
