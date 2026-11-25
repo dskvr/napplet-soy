@@ -1144,20 +1144,42 @@ pre:focus-visible {
 }
 .detail-info aside > .nostr-identifier {
   align-items: center;
-  justify-content: flex-start;
 }
 .nostr-identifier code {
-  flex: 1;
+  display: flex;
   min-width: 0;
+  margin-left: auto;
+  font: inherit;
+  user-select: all;
+}
+.nostr-identifier-head {
+  min-width: 0;
+  max-width: 12ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: right;
-  font-family: var(--mono);
-  user-select: all;
 }
-.nostr-identifier button {
+.nostr-identifier-tail {
   flex: none;
+  white-space: nowrap;
+}
+.nostr-identifier-copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  line-height: 1;
+}
+.nostr-identifier-copy:hover,
+.nostr-identifier-copy:focus-visible {
+  color: var(--foreground);
+}
+.nostr-identifier-copy[data-state='copied'] {
+  color: var(--mint);
 }
 .detail-info strong {
   font-weight: 400;

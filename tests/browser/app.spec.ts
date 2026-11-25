@@ -149,7 +149,7 @@ test('detail pages expose copyable naddr and release nevent', async ({ page, con
   // Retry until hydration attaches the click handler.
   await expect(async () => {
     await copy.click();
-    await expect(copy).toContainText('Copied', { timeout: 1000 });
+    await expect(copy).toHaveAttribute('data-state', 'copied', { timeout: 1000 });
   }).toPass();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(n.naddr);
   // A pinned release has no moving address; only its own event is offered.
